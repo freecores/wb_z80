@@ -1,14 +1,17 @@
-; bjp   modified to assemble on as80.
+; bjp   modified to assemble on as80 assembler (needs different syntax).
 ; minor mods to account for changes in interrupt structure  and I/O
 ; all such are flagged with my initials..... 
 ;
 ; The origional code used operators <   and  >  on symbols to extract the 
-; lower and higher bytes respectively.   It appears that as80 has no equivaltent.
+; lower and higher bytes respectively.   It appears that as80 has no equivalent.
 ; I have hand coded such ---- hopefully correctly.   
 ; This is only a significant issue with such constructs as <stack_end.   
 ; My solution forces the stack to remain in its present location.   
 ;
 ; WARNING   If you must move the stack  --   check comments and fix code for my kludges
+;
+; Origional Code also had a pretty strange "passed" macro.  Removed it and 
+; output a more useful message.	along with the bist controls
 ;
 ;z80 simulator test routine
 ;total error count is left in a at end of test routine
@@ -57,11 +60,12 @@ rst_0038:	ld	a,8
 		code
 ;
 
-fail:		db	'failed'
-pass:		db	'passed'
-message_addr:	equ	#be58
-in_port:	equ	#10
-out_port:	equ	#10
+in_port:	equ	#20
+out_port:	equ	#20
+bist_adr:       equ     #ffff   ;last memory address for bist controll register
+bist_ack:       equ	#01
+bist_err:	equ	#02
+bist_ei:        equ     #04     ;interrupt enable register for bist 
 ;
 data_55:	equ	#55
 data_7f:	equ	#7f
@@ -75,6 +79,9 @@ data_7fff:	equ	#7fff
 data_8000:	equ	#8000
 data_aa55:	equ	#aa55
 data_ffff:	equ	#ffff
+cr:             equ     #0d
+lf:             equ     #0a
+bell:           equ     #07
 ;
 ;inc_error_cnt	macro	     ;bjp   change for initial test to halt on error
 ;		ld	hl,error_cnt
@@ -85,27 +92,27 @@ inc_error_cnt	macro
 		endm
 
 ;
-passed		macro
-		push	bc
-		ld 	bc,(pass)
-		ld	(message_addr),bc
-		ld 	bc,(pass+2)
-		ld	(message_addr+2),bc
-		ld 	bc,(pass+4)
-		ld	(message_addr+4),bc
-		pop	bc
-		endm
+;passed		macro
+;		push	bc
+;		ld 	bc,(pass)
+;		ld	(message_addr),bc
+;		ld 	bc,(pass+2)
+;		ld	(message_addr+2),bc
+;		ld 	bc,(pass+4)
+;		ld	(message_addr+4),bc
+;		pop	bc
+;		endm
 ;
-failed		macro
-		push	bc
-		ld 	bc,(fail)
-		ld	(message_addr),bc
-		ld 	bc,(fail+2)
-		ld	(message_addr+2),bc
-		ld 	bc,(fail+4)
-		ld	(message_addr+4),bc
-		pop	bc
-		endm
+;failed		macro
+;		push	bc
+;		ld 	bc,(fail)
+;		ld	(message_addr),bc
+;		ld 	bc,(fail+2)
+;		ld	(message_addr+2),bc
+;		ld 	bc,(fail+4)
+;		ld	(message_addr+4),bc
+;		pop	bc
+;		endm
 ;
 ;
 
@@ -115,6 +122,7 @@ start:		xor	a
 		ld	(hl),a			;clear error count
 nop_1:		nop
 		nop
+
 ld_167:		ld	a,data_55
 		cp	data_55
 		jr	z,ld_1
@@ -3722,7 +3730,15 @@ dec_57:		ld	a,e
 		cp	a,#54		;<data_aa55-1
 		jr	z,rlca_0
 		inc_error_cnt
-rlca_0:		ld	a,data_80
+		; bjp  don't see any further mucking with sp after the load above.
+		; perhaps it is now safe to enable interrupts. and test them a little
+rlca_0:		ld	hl, bist_adr      ; enable interrupts
+		ld      (hl), bist_ei
+		ld	a, #72         ;bjp  this is >int_tbl  - if you move int_tbl change
+		ld      i, a
+		ei
+		
+                ld	a,data_80
 		rlca
 		jr	c,rlca_1
 		inc_error_cnt
@@ -3754,7 +3770,8 @@ rla_3:		ld	a,data_7f
 		cp	a,data_ff-1
 		jr	z,rrca_0
 		inc_error_cnt
-rrca_0:		scf
+rrca_0:		di                 ; disable interrupts  we want to enable at specific pts
+		scf
 		ccf
 		ld	a,1
 		rrca
@@ -5836,6 +5853,7 @@ ldi_3:		inc	hl
 ldir_0:		ld	hl,var1
 		ld	de,t_var1
 		ld	bc,5
+		ei                 ;bjp  be sure we can interrupt this instruction
 		ldir
 		jp	po,ldir_1
 		inc_error_cnt
@@ -6081,7 +6099,8 @@ cpdr_10:	jp	m,out_0
 ;
 ;the file portfe.xxx must be examined to see if the proper output is generated
 ;
-out_0:		ld	a,#30
+out_0:          di		; interrupts are tested, don't muck up output
+		ld	a,#30
 		out	(out_port),a
 		ld	c,out_port
 		ld	a,#31
@@ -6138,25 +6157,43 @@ inc_pass:	ld	a,(pass_count)
 		ld	a,(hl)
 		cp	a,0
 		jr	z,worked
-		failed
-		cp	a,0
-		jr	nz,stop
+failed:		ld	hl,fail_msg
+		ld	b,27
+		otir
+		ld	hl, bist_adr
+		ld      (hl), bist_ack+bist_err
+		halt
+		nop
+		nop
 ;worked:		passed           ;???? bjp
-worked:		push	bc
-		ld 	bc,(pass)
-		ld	(message_addr),bc
-		ld 	bc,(pass+2)
-		ld	(message_addr+2),bc
-		ld 	bc,(pass+4)
-		ld	(message_addr+4),bc
-		pop	bc
+worked:		ld	hl,match_msg
+		ld	b,33
+		otir
+		ld	hl,pass_msg
+		ld	b,45
+		otir
+		ld	hl, bist_adr
+		ld	(hl), bist_ack
+		
 
 
 stop:		halt
 		nop
 		nop
 		nop
-;
+
+int_start:	push	hl
+		push	bc
+		push    af	; bj  -- this stuff gronks f as well 
+		ld 	hl, int_msg
+		ld	b, 1
+		ld	c, out_port
+		otir
+		pop     af
+		pop	bc
+		pop	hl
+		reti
+		
 ;subroutine 1, must load a with #7f
 ;
 sub1:		ld	a,data_7f
@@ -6215,6 +6252,13 @@ rst_0000_1:	ld	a,(pass_count)
 ;
 ;		data
 ;
+
+fail_msg:		db	cr,lf,'instruction test failed',cr,lf
+match_msg:		db      lf,'0123456 12345 12345 54321 54321',lf
+pass_msg:		db	'If above lines match instruction test passed',lf
+int_msg:                db      bell
+;message_addr:	equ	#be58
+
 var1:		db	data_ff
 var2:		db	data_55
 var3:		db	data_80
@@ -6252,8 +6296,11 @@ stack:		ds	128
 stack_end:	equ	$
 ;
 		end start
-
-
+; only a single pointer in the interrupt table               
+		org	#7200
+int_tbl:	dw	0
+                org     #72fe
+int_ptr:	dw	int_start
 
 
 

@@ -37,16 +37,19 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //  CVS Log
 //
-//  $Id: z80_core_top.v,v 1.2 2004-04-27 21:38:22 bporcella Exp $
+//  $Id: z80_core_top.v,v 1.3 2004-05-13 14:58:53 bporcella Exp $
 //
-//  $Date: 2004-04-27 21:38:22 $
-//  $Revision: 1.2 $
+//  $Date: 2004-05-13 14:58:53 $
+//  $Revision: 1.3 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.2  2004/04/27 21:38:22  bporcella
+//      test lint on core
+//
 //      Revision 1.1  2004/04/27 21:27:13  bporcella
 //      first core build
 //
@@ -62,20 +65,23 @@
 //  z80_sdram_config.v // fundamentally wishbone glue logic - not on top per design guidelines
 //  add a comment test lint
 //-------1---------2---------3--------Module Name and Port List------7---------8---------9--------0
-module z80_core_top(  wb_dat_o,      
+module z80_core_top(  
+                      wb_dat_o,      
                       wb_stb_o,      
                       wb_cyc_o,      
                       wb_we_o,       
                       wb_adr_o,      
                       wb_tga_o,
-                      bist_ack_o,
-                      bist_err_o,
                       wb_ack_i,
                       wb_clk_i,
                       wb_dat_i,
+                      wb_rst_i,
+`ifdef COMPILE_BIST
+                      bist_ack_o,
+                      bist_err_o,
                       bist_req_i,
+`endif
                       int_req_i 
-
 
 );
 
@@ -87,8 +93,6 @@ output          wb_cyc_o;
 output          wb_we_o;
 output [15:0]   wb_adr_o;
 output [1:0]    wb_tga_o;
-output          bist_ack_o;
-output          bist_err_o;
 
 
 //-------1---------2---------3--------Input Ports----------6---------7---------8---------9--------0
@@ -96,18 +100,24 @@ output          bist_err_o;
 input           wb_ack_i;
 input           wb_clk_i;
 input  [7:0]    wb_dat_i;
-input           bist_req_i;
+input           wb_rst_i;
 input           int_req_i;
+
+
+`ifdef COMPILE_BIST
+output          bist_err_o;
+output          bist_ack_o;
+input           bist_req_i;
+`endif
 
 
 //-------1---------2---------3--------Parameters-----------6---------7---------8---------9--------0
 //-------1---------2---------3--------Wires------5---------6---------7---------8---------9--------0
 wire   [15:0]    wb_adr_o; 
-wire   [15:0]    add_out;     // output of adder  (may not wb_adr_o)
 wire   [9:0]     ir1, ir2;
 wire   [15:0]    nn;
 wire   [15:0]    sp;
-wire   [7:0]     ar, fr, br, cr, dr, er, hr, lr;
+wire   [7:0]     ar, fr, br, cr, dr, er, hr, lr, intr;
 wire   [15:0]    ixr, iyr;
 wire   [7:0]     wb_dat_i, wb_dat_o, sdram_do, cfg_do;
 wire   [15:0]    add16;         //  ir2 execution engine output for sp updates
@@ -122,35 +132,46 @@ wire   [15:0]    add16;         //  ir2 execution engine output for sp updates
 //-------1---------2---------3--------Assignments----------6---------7---------8---------9--------0
 //-------1---------2---------3--------State Machines-------6---------7---------8---------9--------0
 
+
+`ifdef COMPILE_BIST
+z80_bist_logic i_z80_bist_logic( 
+        .bist_err_o(bist_err_o), .bist_ack_o(bist_ack_o),
+        .wb_adr_i(wb_adr_o), .wb_dat_i(wb_dat_o), .wb_we_i(wb_we_o), .wb_cyc_i(wb_cyc_o),
+        .wb_stb_i(wb_stb_o), .wb_tga_i(wb_tga_o), .wb_clk_i(wb_clk_i), .wb_rst_i(wb_rst_i)
+        );
+`endif
+
+
+
 z80_memstate2 i_z80_memstate2(
                 .wb_adr_o(wb_adr_o), .wb_we_o(wb_we_o), .wb_cyc_o(wb_cyc_o), .wb_stb_o(wb_stb_o), .wb_tga_o(wb_tga_o), .wb_dat_o(wb_dat_o), 
                 .exec_ir2(exec_ir2), .ir1(ir1), .ir2(ir2), .ir1dd(ir1dd), .ir1fd(ir1fd), .ir2dd(ir2dd), .ir2fd(ir2fd), .nn(nn), .sp(sp),
                 .upd_ar(upd_ar), .upd_br(upd_br), .upd_cr(upd_cr), .upd_dr(upd_dr), .upd_er(upd_er), .upd_hr(upd_hr), .upd_lr(upd_lr),.upd_fr(upd_fr),
-                .beq0(beq0), .ceq0(ceq0),
+                .beq0(br_eq0), .ceq0(cr_eq0),
                 .ar(ar), .fr(fr), .br(br), .cr(cr), .dr(dr), .er(er), .hr(hr), .lr(lr), 
                 .ixr(ixr), .iyr(iyr), 
-                .wb_dat_i(cfg_do), .wb_ack_i(wb_ack_i), 
+                .wb_dat_i(cfg_do), .wb_ack_i(cfg_ack_o), 
                 .int_req_i(int_req_i),
                 .add16(add16),
                 .wb_clk_i(wb_clk_i),
-                .rst_i(rst_i)         // keep this generic - may turn out to be different from wb_rst
-);
+                .rst_i(wb_rst_i)         // keep this generic - may turn out to be different from wb_rst
+                 );
 
 
 z80_inst_exec i_z80_inst_exec( 
                   .br_eq0(br_eq0),
                   .cr_eq0(cr_eq0),
                   .upd_ar(upd_ar), .upd_br(upd_br), .upd_cr(upd_cr), .upd_dr(upd_dr), .upd_er(upd_er), .upd_hr(upd_hr), .upd_lr(upd_lr),.upd_fr(upd_fr),
-                  .ar(ar), .fr(fr), .br(br), .cr(cr), .dr(dr), .er(er), .hr(hr), .lr(lr),  
+                  .ar(ar), .fr(fr), .br(br), .cr(cr), .dr(dr), .er(er), .hr(hr), .lr(lr), .intr(intr), 
                   .ixr(ixr), .iyr(iyr), .add16(add16),
                    .exec_ir2(exec_ir2),
                    .exec_decbc(exec_decbc), .exec_decb(exec_decb), 
                    .ir2(ir2),
                    .clk(wb_clk_i),
-                   .rst(rst_i),
+                   .rst(wb_rst_i),
                    .nn(nn), .sp(sp),
-                   .dd_grp(dd_grp),
-                   .fd_grp(fd_grp)
+                   .ir2dd(ir2dd),
+                   .ir2fd(ir2fd)
                    );
 
 // The parameter passed to i_generic_sprem specifies the number of address bits used by the
@@ -162,21 +183,22 @@ z80_inst_exec i_z80_inst_exec(
 // happy with this......    Depending on which target technology is specified, read behavior changes.
 // It is easy to insure all possible behavior will in fact operate properly  -- see the data reduction
 // logic in sdram_cfg.v --  but still...   I guess the important thing to be aware of is that 
-// big memories like this typically require special back-end handleing.   This is likely to prove
+// big memories like this typically require special back-end handeling.   This is likely to prove
 // no exception  - despite the work that has been done to make this file as generally useful as 
 // possible.
 
-generic_spram #(12) i_generic_spram(
+generic_spram #(15) i_generic_spram(
     // Generic synchronous single-port RAM interface
-    .clk(wb_clk_i), .rst(rst_i), .ce(cfg_ce_spram_o), .we(wb_we_o), .oe(1'b1), .addr(wb_adr_o[11:0]), .di(wb_dat_o), .do(sdram_do)
-);
+    .clk(wb_clk_i), .rst(wb_rst_i), .ce(cfg_ce_spram_o), .we(wb_we_o), .oe(1'b1), .addr(wb_adr_o[14:0]), .di(wb_dat_o), .do(sdram_do)
+    );
 
 
 
 z80_sdram_cfg i_z80_sdram_cfg( 
     .cfg_ce_spram_o(cfg_ce_spram_o), .cfg_do(cfg_do),  .cfg_ack_o(cfg_ack_o), .sdram_di(sdram_do), 
-    .wb_adr_i(wb_adr_o), .wb_dat_i(wb_dat_i), .wb_ack_i(wb_ack_i),  .wb_stb_i(wd_stb_o),
-    .wb_cyc_i(wb_cyc_o), .wb_tga_i(wb_tga_o) );
+    .wb_adr_i(wb_adr_o), .wb_dat_i(wb_dat_i), .wb_ack_i(wb_ack_i),  .wb_stb_i(wb_stb_o),
+    .wb_cyc_i(wb_cyc_o), .wb_tga_i(wb_tga_o) 
+    );
 
 
 endmodule

@@ -1,8 +1,10 @@
-+incdir+.
-z80_core_top.v
-z80_inst_exec.v
-z80_memstate2.v
-z80_sdram_cfg.v
-generic_spram.v
++incdir+rtl
+rtl\z80_testbed.v
+rtl\z80_bist_logic.v
+rtl\z80_core_top.v
+rtl\z80_inst_exec.v
+rtl\z80_memstate2.v
+rtl\z80_sdram_cfg.v
+rtl\generic_spram.v
 
 

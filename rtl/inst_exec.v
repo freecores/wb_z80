@@ -71,16 +71,19 @@
 // 
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: inst_exec.v,v 1.2 2004-04-18 18:50:08 bporcella Exp $
+//  $Id: inst_exec.v,v 1.3 2004-04-19 05:09:11 bporcella Exp $
 //
-//  $Date: 2004-04-18 18:50:08 $
-//  $Revision: 1.2 $
+//  $Date: 2004-04-19 05:09:11 $
+//  $Revision: 1.3 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.2  2004/04/18 18:50:08  bporcella
+//      fixed some lint problems  --
+//
 //      Revision 1.1.1.1  2004/04/13 23:49:54  bporcella
 //      import first files
 //
@@ -128,10 +131,10 @@ input        fd_grp;
 wire [7:0]   src_pqr;    //  arithmetic sources gven by ir2[2:0]
 wire [7:0]   src_hr ;
 wire [7:0]   src_lr ;
-wire [7:0]   alu_out;  // {CF. 8bit_result}
-wire         alu_cry;
+//wire [7:0]   alu_out;  // {CF. 8bit_result}
+//wire         alu_cry;
 
-wire            c_in0, c_out7, c_in8, c_out11, cout15;
+//wire            c_in0, c_out7, c_in8, c_out11, cout15;
 wire   [15:0]   src_a, src_b;
 wire   [15:0]   add16;
 wire            sf, zf, f5f, hf, f3f, pvf, nf, cf; 
@@ -142,7 +145,7 @@ wire        c_8out3;
 wire [7:0]  add_8bit;
 
 wire  [15:0]  src_dblhr       ;
-wire          src_cb_r20      ;
+//wire          src_cb_r20      ;
 wire  [7:0]  src_pqr20       ;
 wire  [7:0]   src_pqr53       ;
 wire  [15:0]  src_dbl         ;
@@ -226,8 +229,8 @@ assign src_dblhr = dd_grp ? ixr :    // ed grp instructions (ADC HL ; SBC HL are
 //assign  src_cb_r20 = (ddcb_grp | fdcb_grp) ? nn[7:0]   :
 //                             cb_grp        ? src_pqr20 :
 //                             ar                        ;
-
-
+assign  br_eq0 = ~|br; // for first cut do this quick and dirty.   
+assign  cr_eq0 = ~|cr; // if this becomes a critical path - make these registers.
 assign  src_pqr20 = {8{ir2[2:0]==REG8_B   }} & br     |
                     {8{ir2[2:0]==REG8_C   }} & cr     |
                     {8{ir2[2:0]==REG8_D   }} & dr     |
@@ -1105,7 +1108,7 @@ assign upd_fr_cbsh =
 //  pretty nomal stuff here
 //CB_BIT   = 4'b01_01,    // these must be compaired with ir2[9:6]
 //  which alu? --  done from alu8  
-//ED_NEG         =    5'b01___100, // compair with {ir2[7:6],ir2[2:0]} all A<= -A                   
+//ED_NEG         =    5'b01___100, // compair with {ir2[7:6],ir2[2:0]} all A<= -A
 
 // rmw 8 types    these handled by standard INC and DEC logic    done.
 //INCs6HL7     = 'h34,//      INC (HL)     ; 34
@@ -1164,7 +1167,7 @@ assign upd_fr =  exec_ir2 & ( ( upd_fr_alu8 )                       |
                               ( upd_fr_cbsh )                       |
                               (CB_BIT == ir2[9:6])                  |
                               ( ed_blk_cp )                         |
-                              (ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]})  |                  
+                              (ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]})  |
                               (CCF == ir2 )                         |
                               (CPL == ir2 )                         |
                               (DAA == ir2 )                         |
@@ -1182,12 +1185,12 @@ begin
     begin
         if ( upd_fr_alu8 )      fr <= alu8_fr;    //  assembled above with 8 bit ALU
         if ( upd_fr_add16)      fr <= {sf, zf, add16[13], c_16out11, add16[11], pvf, 1'b0, c_16out15};
-        if ( upd_fr_edadd16)    fr <= {add16[15],   ~|add16, add16[13], c_out11, 
+        if ( upd_fr_edadd16)    fr <= {add16[15],   ~|add16, add16[13], c_16out11, 
                                        add16[11], add16_ofl,   ~ir2[3], c_16out15};
         if ( upd_fr_sh )        fr <= {sf, zf, sh_alu[5], 1'b0, sh_alu[3], pvf, 1'b0, sh_cry};
         if ( upd_fr_cbsh )      fr <= {sh_alu[7], ~|sh_alu, sh_alu[5], 1'b0, 
                                        sh_alu[3], ~^sh_alu,      1'b0, sh_cry};
-        if (CB_BIT == ir2[9:6]) fr <={bit_alu[7], ~|bit_alu, bit_alu[5], 1'b1, //no idea why hf<=1                           
+        if (CB_BIT == ir2[9:6]) fr <={bit_alu[7], ~|bit_alu, bit_alu[5], 1'b1, //no idea why hf<=1
                                       bit_alu[3], ~|bit_alu, 1'b0      , cf  };// pvf == zf ??? 
         if ( ed_blk_cp )        fr <= {alu8_out[7], ~|alu8_out, alu8_out[5], alu8_hcry,//std a-n stuff
                                    alu8_out[3], alu8_out[7],       1'b1,  cf };    //cept nf and cf
@@ -1202,7 +1205,7 @@ begin
                                      ar[3],  ~^{ar[7:4],nn[3:0]}, 1'b0 , cf    };
         if (ED_RLD == ir2)      fr <= {     sf, ~|{ar[7:4],nn[7:4]}, ar[5], 1'b0, 
                                      ar[3],  ~^{ar[7:4],nn[7:4]}, 1'b0 , cf    };
-        if (ED_LDsA_I == ir2)   fr <= { ir2[7], ~|ir2, ir2[5], 1'b0, ir2[3], iff2, 1'b0, cf }; // iff2 ?                            
+        if (ED_LDsA_I == ir2)   fr <= { ir2[7], ~|ir2, ir2[5], 1'b0, ir2[3], iff2, 1'b0, cf }; // iff2 ?
         
     end
     // in the case of blk_cp the update above is executed 2nd - and so these are don't cares.
@@ -1214,10 +1217,8 @@ end
     
  //----------------------- intr -----------------------------------------------------------
  
-always @(posedge clk)
-begin
-    if (( ED_LDsI_A == ir2) & exec_ir2) intr <= ar;
-end
- 
- 
+always @(posedge clk or posedge rst)
+    if (rst) intr <= 8'h0;
+    else if (( ED_LDsI_A == ir2) & exec_ir2) intr <= ar;
+
 endmodule

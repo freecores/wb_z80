@@ -109,16 +109,19 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: memstate2.v,v 1.6 2004-04-18 18:50:09 bporcella Exp $
+//  $Id: memstate2.v,v 1.7 2004-04-19 05:09:11 bporcella Exp $
 //
-//  $Date: 2004-04-18 18:50:09 $
-//  $Revision: 1.6 $
+//  $Date: 2004-04-19 05:09:11 $
+//  $Revision: 1.7 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.6  2004/04/18 18:50:09  bporcella
+//      fixed some lint problems  --
+//
 //      Revision 1.5  2004/04/17 15:18:02  bporcella
 //      4th lint try
 //      Miha claims reports are now correct
@@ -138,7 +141,7 @@
 //
 //
 //-------1---------2---------3--------Module Name and Port List------7---------8---------9--------0
-module memstate2(wb_adr, wb_we, wb_cyc, wb_stb, wb_lock, wb_tga_io, wb_dat_o,  add_out,
+module memstate2(wb_adr, wb_we, wb_cyc, wb_stb, wb_lock, wb_tga_io, wb_dat_o,
                 exec_ir2, ir1, ir2, ir1dd, ir1fd, ir2dd, ir2fd, nn, sp,
                 
                 upd_ar, upd_br, upd_cr, upd_dr, upd_er, upd_hr, upd_lr,upd_fr,
@@ -164,7 +167,7 @@ output         wb_stb;
 output         wb_lock;     // bit set and clear insts should be atomic - could matter sometime
 output [1:0]   wb_tga_io;
 output [7:0]   wb_dat_o;   // from nn
-output [15:0]  add_out;     // output of adder  (may not wb_adr)
+//output [15:0]  add_out;  (may not wb_adr) 4/18/2004??  why?
 
 output         exec_ir2;
 output [9:0]   ir1, ir2;
@@ -195,9 +198,9 @@ input [15:0]    add16;         //  ir2 execution engine output for sp updates
 parameter   TAG_IO    = 2'b01,   // need to review general wb usage to undrstand how best to 
             TAG_INT   = 2'b10;   // document this.
             //                  12na
-parameter   IPIPE_NOP       = 4'b0000,
-            IPIPE_A2        = 4'b0001,
-            IPIPE_ENN       = 4'b0010,
+parameter   IPIPE_NOP       = 4'b0000,   //  guess I could define single bits and add them up
+            IPIPE_A2        = 4'b0001,   //  would keep from getting lint bitching -- but heck
+            IPIPE_ENN       = 4'b0010,   //  I'm married -> an expert at ignoring such stuff :-)
             IPIPE_ENNA2     = 4'b0011,
             IPIPE_EN2       = 4'b0100,
             IPIPE_EN2A2     = 4'b0101,
@@ -347,18 +350,18 @@ parameter       MEM_NOP      = 5'h00,
 //-------1---------2---------3--------Wires----------------6---------7---------8---------9--------0
 
 
-wire        use_sp;   
-wire        use_pc; 
-wire        use_hl; 
-wire        use_de; 
-wire        use_bc; 
-wire        use_flags;
+//wire        use_sp;  //  old names probably from first go-around 
+//wire        use_pc; 
+//wire        use_hl; 
+//wire        use_de; 
+//wire        use_bc; 
+//wire        use_flags;
 wire        cb_mem;
-wire        br_test8t;  // branch test true  (8 test field)
-wire        br_test4t;  // branch test true  (4 test field)
+//wire        br_test8t;  // branch test true  (8 test field)
+//wire        br_test4t;  // branch test true  (4 test field)
                     
-wire        ofos; 
-wire        any_os;   // most terms above only valid on mem_exec  this includes all stores
+//wire        ofos; 
+//wire        any_os;   // most terms above only valid on mem_exec  this includes all stores
 wire        wb_rdy_nhz;        
 wire        dec_blk_inc;        
 wire        we_next;
@@ -390,8 +393,8 @@ reg [15:0]   wb_adr;
 reg          wb_we; 
 reg          wb_cyc; 
 reg          wb_stb; 
-reg          wb_lock; 
-reg          wb_tga_io;
+//reg          wb_lock; Not used (yet  -- don't delete) 
+reg [1:0]    wb_tga_io;
 
 reg          blk_inc_flg;
 reg [9:0]    ir1, ir2;
@@ -1093,8 +1096,8 @@ wire reln    =    next_mem_state ==  MEM_IFREL_N   |
 
 wire   src2    = {16{ inc    }}  & 16'h0001           |
                  {16{ dec    }}  & 16'hffff           |                 
-                 {16{ rel    }}  & {{8{nn[15]}},nn[15:8]}|
-                 {16{~(rel   |inc   |dec   )}} & 16'h0   ;
+                 {16{ reln    }}  & {{8{nn[15]}},nn[15:8]}|
+                 {16{~(reln   |inc   |dec   )}} & 16'h0   ;
 
 wire   adr_alu     = src2 + src_mux;                 
                   
@@ -1202,7 +1205,7 @@ begin
         DEC_EDNN1:                next_state = {DEC_EDNN2, MEM_NOP,     IPIPE_ENN}; // address to nn
         DEC_EDNN2: 
             if (ed_dbl_rd)      next_state = {DEC_EDRD1, MEM_OFNN,    IPIPE_NOP};    
-            else                next_state = {DEC_EDWR,  MEM_OSNN,    IPIPE_NOP};// OSNN selects data ok?                  
+            else                next_state = {DEC_EDWR,  MEM_OSNN,    IPIPE_NOP};// OSNN selects data ok?
         DEC_EDRD1:              next_state = {DEC_EDRD2, MEM_OFADRP1,  IPIPE_ENN};  // 1st byte 2n         
         DEC_EDRD2:              next_state = {DEC_IF2,   MEM_IFPP1,   IPIPE_ENNA2}; // 2nd byte 2nn
         DEC_EDWR:               next_state = {DEC_IF1,   MEM_OSADRP1,  IPIPE_NOP};
@@ -1251,9 +1254,9 @@ begin
         //   For CALL  Use MEM_CALL to transfer pc<=nn, nn<=pc, adr<=sp then MEM_OSSP then IFPP1
         //   For  LDsSP_NN  yes  update from ir2 decode.                    
         DEC_NN:
-            if      (callnn_true)     next_state = {DEC_NNCALL1, MEM_NOP, IPIPE_ENN}; // this gets new adr in nn
-                                                                                         // if we store from nn we can't do
-                                                                                         // a mem op now
+            if      (callnn_true)     next_state = {DEC_NNCALL1, MEM_NOP, IPIPE_ENN};// this gets new adr in nn
+                                                                                     //if we store from nn we can't do
+                                                                                     // a mem op now
             
             else if (jmpnn_true)      next_state = {DEC_NNJMP,  MEM_NOP,  IPIPE_ENN};    // gotta get nn before we can 
                                                                                          // transfer to adr.
@@ -1359,7 +1362,7 @@ always @(posedge clk)
 //  are keyed off exec_ir2 - and always happen immediately.  ( exec_ir2 always is 
 //  immediately reset - unless of course a new instruction is transferred and executed.
 //
-// 
+//
 //
 always @(posedge clk or posedge rst)
     if (rst) ir2 <= 10'h0;

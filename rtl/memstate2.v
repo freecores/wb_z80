@@ -109,16 +109,20 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: memstate2.v,v 1.5 2004-04-17 15:18:02 bporcella Exp $
+//  $Id: memstate2.v,v 1.6 2004-04-18 18:50:09 bporcella Exp $
 //
-//  $Date: 2004-04-17 15:18:02 $
-//  $Revision: 1.5 $
+//  $Date: 2004-04-18 18:50:09 $
+//  $Revision: 1.6 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.5  2004/04/17 15:18:02  bporcella
+//      4th lint try
+//      Miha claims reports are now correct
+//
 //      Revision 1.4  2004/04/16 18:16:57  bporcella
 //      try lint
 //
@@ -139,7 +143,7 @@ module memstate2(wb_adr, wb_we, wb_cyc, wb_stb, wb_lock, wb_tga_io, wb_dat_o,  a
                 
                 upd_ar, upd_br, upd_cr, upd_dr, upd_er, upd_hr, upd_lr,upd_fr,
                 beq0, ceq0,
-                ar, fr, br, cr, dr, er, hr, lr, 
+                ar, fr, br, cr, dr, er, hr, lr, intr, 
                 ixr, iyr, 
                 wb_dat_i, wb_ack, clk, rst,
                 wb_int_rq,
@@ -158,8 +162,8 @@ output         wb_we;
 output         wb_cyc; 
 output         wb_stb; 
 output         wb_lock;     // bit set and clear insts should be atomic - could matter sometime
-output         wb_tga_io;
-output         wb_dat_o;   // from nn
+output [1:0]   wb_tga_io;
+output [7:0]   wb_dat_o;   // from nn
 output [15:0]  add_out;     // output of adder  (may not wb_adr)
 
 output         exec_ir2;
@@ -176,7 +180,7 @@ output [15:0]   sp;
 input           upd_ar, upd_br, upd_cr, upd_dr, upd_er, upd_hr, upd_lr,upd_fr;
 
 input           beq0, ceq0;
-input [7:0]     ar, fr, br, cr, dr, er, hr, lr;
+input [7:0]     ar, fr, br, cr, dr, er, hr, lr, intr;
 input [15:0]    ixr, iyr;
 input [7:0]     wb_dat_i;
 input           wb_ack, clk, rst;
@@ -361,7 +365,7 @@ wire        we_next;
 wire        hazard;
 wire        wb_int;
 wire [15:0] hl, de, bc;
-wire        mem_exec_dec;
+wire [3:0]  mem_exec_dec;
 
 wire  use_a  ;
 wire  use_b  ;
@@ -395,7 +399,7 @@ reg          ir1dd, ir2dd;
 reg          ir1fd, ir2fd;
 reg [15:0]   nn;
 
-reg   [15:0]       next_state;      // a wire assigned in an alowys loop.
+reg   [14:0]       next_state;      // a wire assigned in an alowys loop.
 
 reg   [5:0]  dec_state;    // the register set each clock from next_dec_state;
 
@@ -959,8 +963,8 @@ assign  use_h = os_h  | opadr_hl;
 assign  use_l = os_l  | opadr_hl;
 
 
-
-assign   use_flags = c_jmp8 | c_jmp4 | c_call | c_ret;
+// old logic not used
+//assign   use_flags = c_jmp8 | c_jmp4 | c_call | c_ret;
 
 
 
@@ -1067,7 +1071,7 @@ wire block_mv_inc = (dec_state == DEC_ED) ? dec_blk_inc : blk_inc_flg; // flag s
 
 
 
-wire inc_s2 =     next_mem_state ==MEM_OFADRP1                |
+wire inc    =     next_mem_state ==MEM_OFADRP1                |
                   next_mem_state ==MEM_OSADRP1                |
                   next_mem_state ==MEM_OFHL_PM & block_mv_inc |
                   next_mem_state ==MEM_OSHL_PM & block_mv_inc |
@@ -1077,20 +1081,20 @@ wire inc_s2 =     next_mem_state ==MEM_OFADRP1                |
                   next_mem_state ==MEM_OSSP_PCM2              |
                   next_mem_state ==MEM_OSSP_P                  ;
 
-wire dec_s2 =     next_mem_state ==MEM_OFHL_PM & ~block_mv_inc |
+wire dec    =     next_mem_state ==MEM_OFHL_PM & ~block_mv_inc |
                   next_mem_state ==MEM_OSHL_PM & ~block_mv_inc |
                   next_mem_state ==MEM_OSDE_PM & ~block_mv_inc |
                   next_mem_state == MEM_OFSP                    ;
                   
 
-wire reln_s2 =    next_mem_state ==  MEM_IFREL_N   | 
+wire reln    =    next_mem_state ==  MEM_IFREL_N   | 
                   next_mem_state ==  MEM_OFIXpD    |
                    next_mem_state ==  MEM_OSIXpD    ;
 
-wire   src2    = {16{ inc }}  & 16'h0001           |
-                 {16{ dec }}  & 16'hffff           |                 
-                 {16{ rel }}  & {{8{nn[15]}},nn[15:8]}|
-                 {16{~(rel_jmp|inc|dec)}} & 16'h0   ;
+wire   src2    = {16{ inc    }}  & 16'h0001           |
+                 {16{ dec    }}  & 16'hffff           |                 
+                 {16{ rel    }}  & {{8{nn[15]}},nn[15:8]}|
+                 {16{~(rel   |inc   |dec   )}} & 16'h0   ;
 
 wire   adr_alu     = src2 + src_mux;                 
                   
@@ -1100,13 +1104,13 @@ wire  pre_inc_dec =    next_mem_state ==  MEM_CALL    |
                        next_mem_state ==  MEM_OSSP     ;
 
 
-wire   mux21 =  pre_inc_dec ? alu : src_mux; 
+wire   mux21 =  pre_inc_dec ? adr_alu : src_mux; 
 
 assign wb_rdy_nhz = (!wb_cyc | wb_ack ) & ~hazard;   //  wishbone ready with no hazard
 wire   wb_rdy     = !wb_cyc | wb_ack;
 
 assign we_next = next_mem_state == MEM_OS1        |
-                 next_mem_state == MEM_OSP        |
+                 next_mem_state == MEM_OSSP       |
                  next_mem_state == MEM_OSIXpD     |
                  next_mem_state == MEM_OSADR      |
                  next_mem_state == MEM_OSSP_PCM2  |
@@ -1408,8 +1412,8 @@ always @(posedge clk or posedge rst)
     
     
 // --  wb_cyc
-
-wire no_wb_start = mem_idle | mem_halt | mem_op3 & blk_cmp_reg | mem_op1 & rmw_reg;
+// below is old logic  -- appears not needed
+//wire no_wb_start = mem_idle | mem_halt | mem_op3 & blk_cmp_reg | mem_op1 & rmw_reg;
 always @(posedge clk or posedge rst)
     if (rst)         wb_cyc <= 1'b0;
     else if (wb_rdy_nhz) wb_cyc <= next_mem_state != MEM_NOP ;

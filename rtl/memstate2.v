@@ -109,16 +109,19 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: memstate2.v,v 1.2 2004-04-16 16:21:04 bporcella Exp $
+//  $Id: memstate2.v,v 1.3 2004-04-16 17:06:54 bporcella Exp $
 //
-//  $Date: 2004-04-16 16:21:04 $
-//  $Revision: 1.2 $
+//  $Date: 2004-04-16 17:06:54 $
+//  $Revision: 1.3 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.2  2004/04/16 16:21:04  bporcella
+//      no code change  -  added a comment and test lint
+//
 //      Revision 1.1.1.1  2004/04/13 23:50:19  bporcella
 //      import first files
 //
@@ -141,7 +144,7 @@ module memstate2(wb_adr, wb_we, wb_cyc, wb_stb, wb_lock, wb_tga_io, wb_dat_o,  a
 
 //-------1---------2---------3--------Output Ports---------6---------7---------8---------9--------0
 // mod only to checkout lint
-//
+// mod again for lint check  --   first check pretty wierd
 output [15:0]  wb_adr; 
 output         wb_we; 
 output         wb_cyc; 

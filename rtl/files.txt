@@ -1,0 +1,8 @@
++incdir+.
+z80_core_top.v
+z80_inst_exec.v
+z80_memstate2.v
+z80_sdram_cfg.v
+generic_spram.v
+
+

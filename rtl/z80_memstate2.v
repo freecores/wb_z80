@@ -1,4 +1,4 @@
-///////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                                                                               //
 //  file name:   memstate2.v                                                                     //
 //  description: memory opertions for  z80                                                       //
@@ -109,16 +109,19 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: z80_memstate2.v,v 1.5 2004-05-27 14:23:36 bporcella Exp $
+//  $Id: z80_memstate2.v,v 1.6 2004-06-03 20:29:35 bporcella Exp $
 //
-//  $Date: 2004-05-27 14:23:36 $
-//  $Revision: 1.5 $
+//  $Date: 2004-06-03 20:29:35 $
+//  $Revision: 1.6 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.5  2004/05/27 14:23:36  bporcella
+//      Instruction test (with interrupts) runs!!!
+//
 //      Revision 1.4  2004/05/21 02:51:25  bporcella
 //      inst test  got to the worked macro
 //
@@ -168,7 +171,7 @@ module z80_memstate2(wb_adr_o, wb_we_o, wb_cyc_o, wb_stb_o, wb_tga_o, wb_dat_o,
                 beq0, ceq0,
                 ar, fr, br, cr, dr, er, hr, lr, intr, 
                 ixr, iyr, 
-                wb_dat_i, wb_ack_i, wb_clk_i, rst_i,
+                wb_dat_i, wb_ack_i, wb_clk_i, 
                 int_req_i,
                 add16,
                 alu8_out,
@@ -177,7 +180,6 @@ module z80_memstate2(wb_adr_o, wb_we_o, wb_cyc_o, wb_stb_o, wb_tga_o, wb_dat_o,
                 blk_mv_upd_de,
                 sh_alu,
                 bit_alu,
-                wb_clk_i,
                 rst_i
 
 
@@ -356,7 +358,7 @@ parameter       MEM_NOP      = 5'h00,
                 MEM_OFADRP1  = 5'h0c,     // used (at least) when double ops above
                 MEM_OSADRP1  = 5'h0d,     //  ""              ""              ""
                              
-                //spare      = 5'h0e,     // use  MEM_OSSP_PCM2
+                MEM_RST     = 5'h0e,     // 
                 MEM_REL2PC  = 5'h0f,     // special address transfer for jmp rel
                 MEM_JMPHL    = 5'h10,     // another special jump transfer
                 MEM_IFNN     = 5'h11,        //  used by call and return
@@ -1256,7 +1258,8 @@ assign {next_dec_state, next_mem_state, next_pipe_state} = next_state;
 
 always @(ir1 or wb_int or inst_haz  or dec_state or mem_exec_dec or cb_mem or ed_nn or
          ed_blk_cp  or ed_blk_in or ed_blk_out or ed_retn or ed_blk_mv or ed_dbl_rd or blk_done or 
-         fr or jmpr_true or callnn_true or jmpnn_true )
+         fr or jmpr_true or callnn_true or jmpnn_true or 
+         ed_rmw or ed_in_reg or blk_cpi_done or jmpr or ex_tos_hl)
          
 begin
     case (dec_state)
@@ -1467,10 +1470,10 @@ begin
         DEC_INT2:       next_state = {DEC_INT3, MEM_OSSP,   IPIPE_NOP};      //was MEM_OSSP_P   why? comment out
         DEC_INT3:       next_state = {DEC_INT4, MEM_INTA,     IPIPE_NOP};
         DEC_INT4:       next_state = {DEC_INT5, MEM_NOP,      IPIPE_ENN};
-        DEC_INT5:       next_state = {DEC_INT6,  MEM_IFINT,    IPIPE_NOP}; // really a pointer fetch -  but treat a a jmpnn
+        DEC_INT5:       next_state = {DEC_INT6,  MEM_IFINT,  IPIPE_NOP}; // really a pointer fetch -  but treat a a jmpnn
         DEC_INT6:       next_state = {DEC_RET2, MEM_IFPP1,   IPIPE_ENN};
         DEC_EXSPHL:     next_state = {DEC_PUSH, MEM_OSSP,     IPIPE_NOP};
-        DEC_RMWDD1:     next_state = {DEC_RMW,  MEM_OFIXpD,       IPIPE_EN1};
+        DEC_RMWDD1:     next_state = {DEC_RMW,  MEM_OFIXpD,   IPIPE_EN1};
         default:        next_state = {DEC_IDLE, MEM_NOP,      IPIPE_NOP};
     endcase
 end

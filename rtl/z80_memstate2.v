@@ -109,16 +109,19 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: z80_memstate2.v,v 1.3 2004-05-18 22:31:21 bporcella Exp $
+//  $Id: z80_memstate2.v,v 1.4 2004-05-21 02:51:25 bporcella Exp $
 //
-//  $Date: 2004-05-18 22:31:21 $
-//  $Revision: 1.3 $
+//  $Date: 2004-05-21 02:51:25 $
+//  $Revision: 1.4 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.3  2004/05/18 22:31:21  bporcella
+//      instruction test getting to final stages
+//
 //      Revision 1.2  2004/05/13 14:58:53  bporcella
 //      testbed built and verification in progress
 //
@@ -154,7 +157,9 @@
 //
 //-------1---------2---------3--------Module Name and Port List------7---------8---------9--------0
 module z80_memstate2(wb_adr_o, wb_we_o, wb_cyc_o, wb_stb_o, wb_tga_o, wb_dat_o,
-                exec_ir2, ir1, ir2, ir1dd, ir1fd, ir2dd, ir2fd, nn, sp,
+                exec_ir2, 
+                exec_decbc, exec_decb,
+                ir1, ir2, ir1dd, ir1fd, ir2dd, ir2fd, nn, sp,
                 
                 upd_ar, upd_br, upd_cr, upd_dr, upd_er, upd_hr, upd_lr,upd_fr,
                 beq0, ceq0,
@@ -164,6 +169,9 @@ module z80_memstate2(wb_adr_o, wb_we_o, wb_cyc_o, wb_stb_o, wb_tga_o, wb_dat_o,
                 int_req_i,
                 add16,
                 alu8_out,
+                adr_alu,   
+                blk_mv_upd_hl,
+                blk_mv_upd_de,
                 sh_alu,
                 bit_alu,
                 wb_clk_i,
@@ -184,14 +192,18 @@ output         wb_stb_o;
 //output         wb_lock;     // bit set and clear insts should be atomic - could matter sometime
 output [1:0]   wb_tga_o;
 output [7:0]   wb_dat_o;   // from nn
-//output [15:0]  add_out;  (may not wb_adr_o) 4/18/2004??  why?
+output [15:0]  adr_alu;    // 4/18/2004??  why? 5/20  to update hl on 
+                           // block moves silly
 
+output         blk_mv_upd_hl;
+output         blk_mv_upd_de;
 output         exec_ir2;
 output [9:0]   ir1, ir2;
 output         ir1dd, ir2dd;
 output          ir1fd, ir2fd;
 output [15:0]   nn;
 output [15:0]   sp;
+output          exec_decbc, exec_decb; 
 
 
 
@@ -340,7 +352,7 @@ parameter       MEM_NOP      = 5'h00,
                 MEM_OFADRP1  = 5'h0c,     // used (at least) when double ops above
                 MEM_OSADRP1  = 5'h0d,     //  ""              ""              ""
                              
-                MEM_IFRST    = 5'h0e,     // special address transfer
+                //spare      = 5'h0e,     // use  MEM_OSSP_PCM2
                 MEM_REL2PC  = 5'h0f,     // special address transfer for jmp rel
                 MEM_JMPHL    = 5'h10,     // another special jump transfer
                 MEM_IFNN     = 5'h11,        //  used by call and return
@@ -445,7 +457,17 @@ reg          ex_tos_hl;    // special flag to help implement EXs6SP7_HL
 //
 // ir is 10 bits most significant codes ir1[9:8] = { EDgrp, CBgrp }  DDgrp and FDgrp are modifiers
 
+assign  blk_mv_upd_hl = next_mem_state == MEM_OFHL_PM & wb_rdy_nhz|
+                        next_mem_state == MEM_OSHL_PM & wb_rdy_nhz ;
+assign  blk_mv_upd_de = next_mem_state == MEM_OSDE_PM & wb_rdy_nhz;
+// this term not active for compairs as it mucks with flag register in a "blk_mv" way.
+// we use exec_ir2 to do everything  in blk compairs - on the inst_exec file.  
+assign  exec_decbc =  (dec_state == DEC_ED) & (  ed_blk_mv) & wb_rdy_nhz |
+                      (dec_state == DEC_EDBMV3)   & wb_rdy_nhz           ;
 
+assign  exec_decb = (dec_state == DEC_ED) & ( ed_blk_in | ed_blk_out) & wb_rdy_nhz|
+                    (dec_state == DEC_EDBIN3)    & wb_rdy_nhz                     |
+                    (dec_state == DEC_EDBOUT3)   & wb_rdy_nhz                      ;
 assign wb_dat_o = nn[15:8];
 
 wire   sf, zf, f5f, hf, f3f, pvf, nf, cf;
@@ -598,7 +620,7 @@ assign mem_exec_dec =
     {I1DCNT {DECsL        == ir1}} & I1_R2R |//      DEC L        ; 2D
     {I1DCNT {DECsSP       == ir1}} & I1_R2R |//      DEC SP       ; 3B
     {I1DCNT {DI           == ir1}} & I1_R2R |//      DI           ; F3
-    {I1DCNT {DJNZs$t2     == ir1}} & I1_R2R |//      DJNZ $+2     ; 10 XX
+    {I1DCNT {DJNZs$t2     == ir1}} & I1_JMPR|//      DJNZ $+2     ; 10 XX
     {I1DCNT {EI           == ir1}} & I1_R2R |//      EI           ; FB
     {I1DCNT {EXX          == ir1}} & I1_R2R |//      EXX          ; D9
     {I1DCNT {EXsAF_AFp    == ir1}} & I1_R2R |//      EX AF,AF'    ; 08
@@ -783,10 +805,10 @@ wire ed_blk_in =  ED_INIR      == ir1 |  ED_INI      == ir1 |
 wire ed_blk_out = ED_OTIR      == ir1 |  ED_OUTI      == ir1 |
                   ED_OTDR      == ir1 |  ED_OUTD      == ir1 ;
 
-wire dec_blk_io = ed_blk_in | ed_blk_in;
+wire dec_blk_io = ed_blk_in | ed_blk_out;
 
-wire blk_done =  ~blk_rpt_flg |  beq0 & ceq0 | blk_io_flg & ceq0;
-
+wire blk_done =  ~blk_rpt_flg |  beq0 & ceq0 | blk_io_flg & beq0;
+wire blk_cpi_done = ~blk_rpt_flg | ({br, cr} == 16'h1);
 assign dec_blk_inc =  ED_LDIR      == ir1 |
                       ED_CPIR      == ir1 |
                       ED_INIR      == ir1 |
@@ -804,19 +826,26 @@ assign dec_blk_inc =  ED_LDIR      == ir1 |
 //ED71 simply outs the value 0 to I/O port C.
 //  This suggests that we should decode as follows:
 //  I hope if I don't get all the IM duplicates right it won't be a tragedy
-//        ED_INsREG_6C7  =    7'b1001___000,// compair with {ir[7:6],ir[2:0]}
 //        
+//        ED_INsREG_6C7  =    7'b1001___000, // compair with {ir[9:6],ir[2:0]}
+//        ED_OUTs6C7_REG =    7'b1001___001, // compair with {ir[9:6],ir[2:0]}
 //        ED_SBCsHL_REG  =    8'b1001__0010, // compair with {ir[9:6],ir[3:0]}
 //        ED_ADCsHL_REG  =    8'b1001__1010, // compair with {ir[9:6],ir[3:0]}
 //        ED_LDs6NN7_REG =    8'b1001__0011, // compair with {ir[9:6],ir[3:0]}  REG = BC,DE,HL,SP                   
 //        ED_LDsREG_6NN7 =    8'b1001__1011, // compair with {ir[9:6],ir[3:0]}  REG = BC,DE,HL,SP
 //        ED_NEG         =    7'b1001___100, // compair with {ir[9:6],ir[2:0]}  all A<= -A                  
 //        ED_RETN        =    7'b1001___101, // compair with {ir[9:6],ir[2:0]} and !reti
+
+wire ed_in_reg  = ED_INsREG_6C7   ==  {ir1[9:6],ir1[2:0]}; 
+wire ed_out_reg = ED_OUTs6C7_REG  ==  {ir1[9:6],ir1[2:0]}; 
+
 wire ed_nn = ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} |
              ED_LDsREG_6NN7 == {ir1[9:6],ir1[3:0]}  ;
 
 //  we use all these to enable interrupts
 wire ed_retn = ED_RETN == {ir1[9:6],ir1[2:0]};
+wire ed_rmw = ED_RRD == ir1 |  // ED 67   nibble roates A (HL)
+              ED_RLD == ir1  ; // ED 6F   nibble roates A (HL)
 
 assign ed_dbl_rd =  ED_LDsREG_6NN7 == {ir1[9:6],ir1[3:0]};   
     
@@ -831,13 +860,15 @@ wire jmpr_true =
     JRsC_$t2     == ir1  & fr[0]  |            
     JRsNC_$t2    == ir1  & ~fr[0] |            
     JRsZ_$t2     == ir1  & fr[6]  |             
-    JRsNZ_$t2    == ir1  & ~fr[6] ; 
+    JRsNZ_$t2    == ir1  & ~fr[6] |
+    DJNZs$t2     == ir1  & (br != 8'h1); 
 wire jmpr =               
     JRs$t2       == ir1   |    
     JRsC_$t2     == ir1   |            
     JRsNC_$t2    == ir1   |            
     JRsZ_$t2     == ir1   |             
-    JRsNZ_$t2    == ir1   ;     
+    JRsNZ_$t2    == ir1   |   
+    DJNZs$t2     == ir1;     
     
               
 //assign { sf, zf. f5f, hf, f3f, pvf, nf, cf} = fr;              
@@ -1071,7 +1102,7 @@ wire  opadr_hl  =  LDsB_6HL7  == ir1 | ORs6HL7    == ir1 | LDs6HL7_B == ir1 |
 //                           ------------------->|     |        |     |
 //                                               |_____|        |_____|
 //  MEM_NOP  
-//  MEM_IFPP1   MEM_OFIXpD     MEM_CALL    MEM_IFRST     MEM_OFHL_PM    MEM_IOF_C  
+//  MEM_IFPP1   MEM_OFIXpD     MEM_CALL    MEM_RST     MEM_OFHL_PM    MEM_IOF_C  
 //  MEM_OS1,    MEM_OSIXpD     MEM_OSNN,   MEM_REL2PC   MEM_OSHL_PM    MEM_IOS_C  
 //  MEM_OF1,    MEM_OSADR      MEM_OFNN    MEM_JMPHL     MEM_OSDE_PM    MEM_IOF_N  
 //  MEM_OFSP    MEM_OSSP_PCM2  MEM_OFADRP1 MEM_IFNN      MEM_INTA       MEM_IOS_N  
@@ -1080,6 +1111,7 @@ wire  opadr_hl  =  LDsB_6HL7  == ir1 | ORs6HL7    == ir1 | LDs6HL7_B == ir1 |
 
 wire src_sp = next_mem_state == MEM_OFSP                     |
               next_mem_state == MEM_OSSP                     |
+              next_mem_state == MEM_OSSP_PCM2                |
               next_mem_state == MEM_CALL                       ;
 wire src_pc =  next_mem_state ==   MEM_IFPP1   |
                next_mem_state ==  MEM_REL2PC  ;
@@ -1108,12 +1140,14 @@ wire src_hl =   next_mem_state == MEM_OF1  &
                 next_mem_state == MEM_OFHL_PM                |
                 next_mem_state == MEM_OSHL_PM                |
                 next_mem_state == MEM_OS_HL_N                | 
-                next_mem_state == MEM_JMPHL                   ;
+                next_mem_state == MEM_JMPHL  & !( ir1dd | ir1fd);
                 
 wire src_ix =  next_mem_state == MEM_OFIXpD  &  ir1dd |
+               next_mem_state == MEM_JMPHL   &  ir1dd |
                next_mem_state == MEM_OSIXpD  &  ir1dd  ;
 
 wire src_iy =  next_mem_state == MEM_OFIXpD  &  ir1fd |
+               next_mem_state == MEM_JMPHL   &  ir1fd |
                next_mem_state == MEM_OSIXpD  &  ir1fd  ;
                
 wire src_adr = next_mem_state == MEM_OFADRP1  |
@@ -1134,9 +1168,8 @@ wire [15:0]  src_mux =   {16{ src_sp  }} & sp                 |
                          {16{ src_bc  }} & bc                 |
                          {16{ src_ix  }} & ixr                |
                          {16{ src_iy  }} & iyr                |
-                         {16{ src_adr }} & wb_adr_o             |
-                         {16{ src_int }} & { intr, nn[15:8] } |
-                         {16{next_mem_state == MEM_IFRST}} & {10'h0, ir1[6:4], 3'h0} ;
+                         {16{ src_adr }} & wb_adr_o           |
+                         {16{ src_int }} & { intr, nn[15:8] }  ;
                    
 wire block_mv_inc = (dec_state == DEC_ED) ? dec_blk_inc : blk_inc_flg; // flag set at DEC_ED
 
@@ -1149,15 +1182,17 @@ wire inc    =     next_mem_state ==MEM_OFADRP1                |
                   next_mem_state ==MEM_OSDE_PM & block_mv_inc |
                   next_mem_state ==MEM_OFSP                   |
                   next_mem_state ==MEM_IFPP1                  |
-                  next_mem_state ==MEM_OSSP_PCM2              |
+                  next_mem_state ==MEM_JMPHL                  |
                   next_mem_state ==MEM_IFNN                   |
                   next_mem_state ==MEM_OFNN                   |
                   next_mem_state ==MEM_OSNN                   |
+                  next_mem_state ==MEM_RST                  |
                   next_mem_state ==MEM_OSSP_P                  ;
 
 wire dec    =     next_mem_state ==MEM_OFHL_PM & ~block_mv_inc |
                   next_mem_state ==MEM_OSHL_PM & ~block_mv_inc |
                   next_mem_state ==MEM_OSDE_PM & ~block_mv_inc |
+                  next_mem_state ==MEM_OSSP_PCM2               |
                   next_mem_state ==MEM_CALL                    |
                   next_mem_state == MEM_OSSP                    ;
                   
@@ -1183,7 +1218,6 @@ wire  pre_inc_dec =    next_mem_state ==  MEM_CALL    |
                        next_mem_state ==  MEM_OSIXpD  |
                        next_mem_state ==  MEM_OFADRP1 |
                        next_mem_state ==  MEM_OSADRP1 |
-                       
                        next_mem_state ==  MEM_OSSP     ;
 
 
@@ -1244,9 +1278,9 @@ begin
                 I1_PUSH : next_state = {DEC_PUSH, MEM_OSSP,  IPIPE_EN12};
                 I1_RET  : next_state = {DEC_RET,  MEM_OFSP,  IPIPE_EN12};
                 I1_RMW  : next_state = {DEC_RMW,  MEM_OF1,   IPIPE_EN12};//can't gronk ir1  - blow off if
-                I1_RST  : next_state = {DEC_IF2,  MEM_IFRST, IPIPE_ENN};
+                I1_RST  : next_state = {DEC_NNCALL2,  MEM_OSSP_PCM2, IPIPE_NOP};
                 I1_R2R  : next_state = {DEC_EXEC, MEM_IFPP1, IPIPE_EN12A2};
-                I1_JMPR : next_state = {DEC_N,    MEM_NOP,   IPIPE_ENN};
+                I1_JMPR : next_state = {DEC_N,    MEM_NOP,   IPIPE_ENNEN2A2};
                 I1_HALT : next_state = {DEC_HALT, MEM_NOP  , IPIPE_EN2};
                 default : next_state = {DEC_EXEC, MEM_IFPP1, IPIPE_EN12A2}; //I1_R2R  
                 endcase
@@ -1272,9 +1306,9 @@ begin
             I1_PUSH : next_state = {DEC_PUSH, MEM_OSSP,  IPIPE_EN12};
             I1_RET  : next_state = {DEC_RET,  MEM_OFSP,  IPIPE_EN12};
             I1_RMW  : next_state = {DEC_RMWDD1,  MEM_IFPP1,  IPIPE_ENNEN2};
-            I1_RST  : next_state = {DEC_IF2,  MEM_IFRST, IPIPE_NOP};  // just dump next inst
+            I1_RST  : next_state = {DEC_NNCALL2,  MEM_OSSP_PCM2, IPIPE_NOP};  // just dump next inst
             I1_R2R  : next_state = {DEC_EXEC, MEM_IFPP1, IPIPE_EN12A2}; //I1_R2R
-            I1_JMPR : next_state = {DEC_N,    MEM_NOP,   IPIPE_ENN};
+            I1_JMPR : next_state = {DEC_N,    MEM_NOP,   IPIPE_ENNEN2A2};
             I1_HALT : next_state = {DEC_HALT, MEM_NOP  , IPIPE_EN2};
             default : next_state = {DEC_EXEC, MEM_IFPP1, IPIPE_EN12A2}; //I1_R2R  
             endcase
@@ -1282,11 +1316,14 @@ begin
             if (ed_nn)            next_state = {DEC_EDNN1,  MEM_IFPP1,   IPIPE_ENNEN2};
             // we need to set inc and io and repeat flags on this state for continued block
             // processing  --   keep the states of this machine somewhat manageable.
+            else if (ed_rmw )     next_state = {DEC_RMW,    MEM_OF1,     IPIPE_EN12}; // RLD RRD
             else if (ed_blk_cp )  next_state = {DEC_EDBCP1, MEM_OFHL_PM, IPIPE_EN12};// MEM_OFHL_PM triggers --BC
             else if (ed_blk_in )  next_state = {DEC_EDBIN1, MEM_IOF_C,   IPIPE_EN12};// MEM_IOF_C triggers --B
             else if (ed_blk_out)  next_state = {DEC_EDBOUT1,MEM_OFHL_PM, IPIPE_EN12};
             else if (ed_blk_mv )  next_state = {DEC_EDBMV1, MEM_OFHL_PM, IPIPE_EN12};
             else if (ed_retn   )  next_state = {DEC_RET,    MEM_OFSP,    IPIPE_EN12};// see int logic below
+            else if (ed_in_reg )  next_state = {DEC_EDRD2,  MEM_IOF_C,   IPIPE_EN12};
+            else if (ed_out_reg ) next_state = {DEC_IF2A,   MEM_IOS_C,   IPIPE_EN12};
             else                  next_state = {DEC_EXEC, MEM_IFPP1,    IPIPE_EN12A2};
                    // double register reads and writes here    
         DEC_EDNN1:                next_state = {DEC_EDNN2, MEM_IFPP1,     IPIPE_ENN}; // address to nn
@@ -1297,30 +1334,34 @@ begin
         DEC_EDRD2:              next_state = {DEC_EXEC,   MEM_IFPP1,   IPIPE_ENNA2}; // 2nd byte 2nn
         DEC_EDWR:               next_state = {DEC_IF2A,   MEM_OSADRP1,  IPIPE_NOP};
         
-        //  ED  block moves
+        //  ED  block compair
+        //  Got a tricky problem here.....   fr is updated in a different manner for cpi and 
+        //  we really can't test blk_done here (bc is updated on this tick).  So make the test 
+        //  for done be bc==1 and use enna2 for everything.   Course this begs the question if 
+        //  this approach is not best for all block moves ?????  
         DEC_EDBCP1: 
-            if (blk_done)   next_state = {DEC_EXEC, MEM_IFPP1,IPIPE_ENNA2};
-            else if(wb_int) next_state = {DEC_INT1, MEM_NOP, IPIPE_ENNA2};
-            else            next_state = {DEC_EDBCP2, MEM_NOP,  IPIPE_ENNA2};//set flags 
+            if (blk_cpi_done) next_state = {DEC_EXEC, MEM_IFPP1,IPIPE_ENNA2};
+            else if(wb_int)   next_state = {DEC_INT1, MEM_NOP, IPIPE_ENNA2};
+            else              next_state = {DEC_EDBCP2, MEM_NOP,  IPIPE_ENNA2};//set flags 
         DEC_EDBCP2:                 next_state = {DEC_EDBCP3, MEM_NOP,     IPIPE_NOP};//wait for fr. alu_out is slow 
-        DEC_EDBCP3: if (fr[7])      next_state = {DEC_EXEC  , MEM_IFPP1,   IPIPE_NOP};
+        DEC_EDBCP3: if (fr[6])      next_state = {DEC_EXEC  , MEM_IFPP1,   IPIPE_NOP};
                     else            next_state = {DEC_EDBCP1, MEM_OFHL_PM, IPIPE_NOP};
                               
         DEC_EDBIN1:                  next_state = {DEC_EDBIN2, MEM_NOP,   IPIPE_ENN};
         DEC_EDBIN2: if (blk_done)    next_state = {DEC_IF2A,  MEM_OSHL_PM,IPIPE_NOP}; // implies nn
                     else if (wb_int) next_state = {DEC_INT1,  MEM_OSHL_PM,IPIPE_NOP};
-                    else             next_state = {DEC_EDBIN1,MEM_OSHL_PM,IPIPE_NOP};//set flags 
+                    else             next_state = {DEC_EDBIN3,MEM_OSHL_PM,IPIPE_NOP};//set flags 
         DEC_EDBIN3:                  next_state = {DEC_EDBIN1, MEM_IOF_C,   IPIPE_NOP};
         
         DEC_EDBOUT1:                 next_state = {DEC_EDBOUT2, MEM_NOP,   IPIPE_ENN};                    
-        DEC_EDBOUT2:if (blk_done)    next_state = {DEC_EXEC,  MEM_IOS_C,IPIPE_NOP};                    
+        DEC_EDBOUT2:if (blk_done)    next_state = {DEC_IF2A,  MEM_IOS_C,IPIPE_NOP};                    
                     else if (wb_int) next_state = {DEC_INT1,  MEM_IOS_C,IPIPE_NOP}; // DEC_EDBOUT: if (blk_rpt)
                     else             next_state = {DEC_EDBOUT3,MEM_IOS_C,IPIPE_NOP};        
         
         DEC_EDBOUT3:                 next_state = {DEC_EDBOUT1,MEM_OFHL_PM, IPIPE_NOP};
 
         DEC_EDBMV1:                  next_state = {DEC_EDBMV2, MEM_NOP,   IPIPE_ENN};                    
-        DEC_EDBMV2: if (blk_done)    next_state = {DEC_EXEC,  MEM_OSDE_PM,IPIPE_NOP};                    
+        DEC_EDBMV2: if (blk_done)    next_state = {DEC_IF2A,  MEM_OSDE_PM,IPIPE_NOP};                    
                     else if (wb_int) next_state = {DEC_INT1,  MEM_OSDE_PM,IPIPE_NOP}; //DEC_EDBOUT: if (blk_rpt)
                     else             next_state = {DEC_EDBMV3,MEM_OSDE_PM,IPIPE_NOP};        
         
@@ -1361,7 +1402,7 @@ begin
             else                      next_state = { DEC_IF2, MEM_IFPP1, IPIPE_ENNEN2A2};
         
         DEC_NNCALL1:        next_state = {DEC_NNCALL2, MEM_CALL ,  IPIPE_NOP}; 
-        DEC_NNCALL2:        next_state = {DEC_IF1,    MEM_OSSP,   IPIPE_ENN};//A1 activates r2r xfers from ir1
+        DEC_NNCALL2:        next_state = {DEC_IF1,    MEM_OSSP,   IPIPE_NOP};//A1 activates r2r xfers from ir1
         DEC_NNJMP:        next_state = {DEC_IF2,     MEM_IFNN  , IPIPE_NOP};
         
         // ISSUE:  we blow out ir1 here - so need to keep some status to execute OSNN2.
@@ -1495,14 +1536,16 @@ always @(posedge wb_clk_i)
 
 //--------------- block move flags ------------------------
 always @(posedge wb_clk_i)
-    if (dec_state == DEC_ED) blk_inc_flg <= dec_blk_inc;
+    if (dec_state == DEC_ED)           blk_inc_flg <= dec_blk_inc;
+    else if (dec_state == DEC_EXEC)    blk_inc_flg <= 1'b0;
+always @(posedge wb_clk_i)
+    if (dec_state == DEC_ED)           blk_rpt_flg <= dec_blk_rpt;
+    else if (dec_state == DEC_EXEC)    blk_rpt_flg <= 1'b0;
+
 
 always @(posedge wb_clk_i)
-    if (dec_state == DEC_ED) blk_rpt_flg <= dec_blk_rpt;
-
-
-always @(posedge wb_clk_i)
-    if (dec_state == DEC_ED) blk_io_flg <= dec_blk_io;
+    if (dec_state == DEC_ED)           blk_io_flg <= dec_blk_io;
+    else if (dec_state == DEC_EXEC)    blk_io_flg <= 1'b0;
 
 
 //-------------------------- memory interface stuff ----------------------------
@@ -1590,21 +1633,30 @@ wire ir2_cb_bit   =  (ir2[9:6] ==  CB_RES ) |
                      (ir2[9:6] ==  CB_SET )  ;
 
 
-wire [15:0] pc_2 = pc - 16'h2; 
+wire [15:0] pc_12 = pc -  ( (DEC_INT1 == dec_state ) ? 16'h2 : 16'h1 );
+
+//  bjp comment   --   logic here is getting pretty slow  --- the else if's are out of 
+//  line   need to get this cleaned up for synthesis  --  but first get it logically 
+//  correct.
 always @(posedge wb_clk_i or posedge rst_i)
     if (rst_i)  nn <= 6'h00;
     else if (wb_rdy_nhz)
     begin
-        if ( we_next & flag_os1)                            nn <= { nn[7:0], nn[15:8] } ;
+        // This term forces the second store data in any flow to be from nn[7:0]
+        // LOL   better not do this for block repeat flows
+        if ( we_next & flag_os1 & ~blk_rpt_flg)              nn <= { nn[7:0], nn[15:8] } ;
         
-        else if(we_next & ( next_mem_state == MEM_CALL))     nn <= {pc};
-        else if(we_next & ( next_mem_state == MEM_OSSP_PCM2))  nn <= {pc_2[7:0], pc_2[15:8]};
+        else if( next_mem_state == MEM_CALL)                 nn <= {pc};
+        else if( next_mem_state == MEM_OSSP_PCM2)            nn <= {pc_12};
         else if(EXs6SP7_HL== ir2 & ir2dd & exec_ir2)         nn <= ixr;
         else if(EXs6SP7_HL== ir2 & ir2fd & exec_ir2)         nn <= iyr;
         else if(EXs6SP7_HL== ir2         & exec_ir2)          nn <= hl;
         else if((INCs6HL7==ir2 | DECs6HL7==ir2) & exec_ir2)   nn[15:8] <= alu8_out;
-        else if( ir2_cb_shift & MEM_OSADR == next_mem_state )       nn[15:8] <= sh_alu;
-        else if( ir2_cb_bit   & MEM_OSADR == next_mem_state )       nn[15:0] <= bit_alu;
+        else if( ir2_cb_shift & MEM_OSADR == next_mem_state ) nn[15:8] <= sh_alu;
+        else if( ir2_cb_bit   & MEM_OSADR == next_mem_state ) nn[15:8] <= bit_alu;
+        else if( ED_RRD == ir2 & MEM_OSADR == next_mem_state) nn[15:8] <= {ar[3:0], nn[15:12]};
+        else if( ED_RLD == ir2 & MEM_OSADR == next_mem_state) nn[15:8] <= {nn[11:8], ar[3:0] };
+        
         else if (next_pipe_state[1])  nn  <= { wb_dat_i, nn[15:8] };   // ENN overides os stuff 
         // these are the general cases with ir1 providing register specification
         // let PUSH have priority  (we need os_h for some indexed stores  under ir1dd)  
@@ -1613,6 +1665,7 @@ always @(posedge wb_clk_i or posedge rst_i)
                             next_mem_state == MEM_OSIXpD  |
                             next_mem_state == MEM_OSSP    |
                             next_mem_state == MEM_IOS_N   |
+                            next_mem_state == MEM_IOS_C   |
                             next_mem_state == MEM_OSNN     ) )
             // oh my god  -- operands go out in different order to stack than they
             // do to normal stores. Oh well, guess that makes ordering consistent in
@@ -1645,8 +1698,9 @@ always @(posedge wb_clk_i or posedge rst_i)
         if (next_mem_state == MEM_DECPC) pc <= pc - 16'h1;  // decrementer could perhaps be shared.
         if (next_mem_state == MEM_IFPP1) pc <= adr_alu;
         if (next_mem_state == MEM_CALL ) pc <= nn;         //Use MEM_CALL to exchange pc<=>nn
-        if (next_mem_state == MEM_IFRST) pc <= src_mux;
-        if (next_mem_state == MEM_JMPHL) pc <= src_mux;
+        if (next_mem_state == MEM_RST) pc <= adr_alu;
+        if (next_mem_state == MEM_JMPHL) pc <= adr_alu;
+        if (next_mem_state == MEM_OSSP_PCM2) pc <= { 10'h0, ir1[5:3], 3'h0} ;
         if (next_mem_state == MEM_IFNN ) pc <= adr_alu;    //on jumps get adr+1 in pc immediately. 
         if (next_mem_state == MEM_REL2PC) pc <= adr_alu;
         if (next_mem_state == MEM_IFINT) pc <= src_mux;

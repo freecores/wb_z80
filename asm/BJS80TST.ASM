@@ -60,7 +60,7 @@ rst_0038:	ld	a,8
 fail:		db	'failed'
 pass:		db	'passed'
 message_addr:	equ	#be58
-in_port:	equ	#ff
+in_port:	equ	#10
 out_port:	equ	#10
 ;
 data_55:	equ	#55

@@ -64,16 +64,19 @@
 //
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: opcodes.v,v 1.2 2004-05-18 22:31:20 bporcella Exp $
+//  $Id: opcodes.v,v 1.3 2004-05-21 02:51:25 bporcella Exp $
 //
-//  $Date: 2004-05-18 22:31:20 $
-//  $Revision: 1.2 $
+//  $Date: 2004-05-21 02:51:25 $
+//  $Revision: 1.3 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.2  2004/05/18 22:31:20  bporcella
+//      instruction test getting to final stages
+//
 //      Revision 1.1  2004/04/17 18:26:06  bporcella
 //      put this here to try an end-run around lint mikefile problem
 //
@@ -370,8 +373,8 @@ parameter  NOP          = 10'h00,//      NOP         ; 00
            ED_IMs1      =  10'h256,  //      IM 1       ; ED 56   set IM1
            ED_LDsA_I    =  10'h257,  //      LD A,I     ; ED 57   move I to A
            ED_IMs2      =  10'h25E,  //      IM 2       ; ED 5E   set IM2
-           ED_RRD       =  10'h267,  //      RRD        ; ED 67   nibble roates A HL
-           ED_RLD       =  10'h26F,  //      RLD        ; ED 6F   nibble roates A HL
+           ED_RRD       =  10'h267,  //      RRD        ; ED 67   nibble roates A (HL)
+           ED_RLD       =  10'h26F,  //      RLD        ; ED 6F   nibble roates A (HL)
                                     
            
            ED_LDI       =  10'h2A0,  //      LDI        ; ED A0    These are block move 
@@ -414,7 +417,7 @@ parameter  NOP          = 10'h00,//      NOP         ; 00
 
 //The ED70 instruction reads from I/O port C, 
 //but does not store the result.
-//It just affects the flags.  Hard to test.    like the other IN x,(C) instruction. 
+//It just affects the flags.  like the other IN x,(C) instruction. 
 //
 //ED71 simply outs the value 0 to I/O port C.
 //  This suggests that we should decode as follows:

@@ -37,16 +37,19 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //  CVS Log
 //
-//  $Id: z80_core_top.v,v 1.4 2004-05-18 22:31:21 bporcella Exp $
+//  $Id: z80_core_top.v,v 1.5 2004-05-21 02:51:25 bporcella Exp $
 //
-//  $Date: 2004-05-18 22:31:21 $
-//  $Revision: 1.4 $
+//  $Date: 2004-05-21 02:51:25 $
+//  $Revision: 1.5 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.4  2004/05/18 22:31:21  bporcella
+//      instruction test getting to final stages
+//
 //      Revision 1.3  2004/05/13 14:58:53  bporcella
 //      testbed built and verification in progress
 //
@@ -123,7 +126,8 @@ wire   [15:0]    sp;
 wire   [7:0]     ar, fr, br, cr, dr, er, hr, lr, intr;
 wire   [15:0]    ixr, iyr;
 wire   [7:0]     wb_dat_i, wb_dat_o, sdram_do, cfg_do;
-wire   [15:0]    add16;         //  ir2 execution engine output for sp updates
+wire   [15:0]    add16;     //  ir2 execution engine output for sp updates
+wire   [15:0]    adr_alu;   //  address alu to inst to update hl and de on block moves      
 wire   [7:0]     alu8_out, sh_alu, bit_alu;
 
 
@@ -148,7 +152,9 @@ z80_bist_logic i_z80_bist_logic(
 
 z80_memstate2 i_z80_memstate2(
                 .wb_adr_o(wb_adr_o), .wb_we_o(wb_we_o), .wb_cyc_o(wb_cyc_o), .wb_stb_o(wb_stb_o), .wb_tga_o(wb_tga_o), .wb_dat_o(wb_dat_o), 
-                .exec_ir2(exec_ir2), .ir1(ir1), .ir2(ir2), .ir1dd(ir1dd), .ir1fd(ir1fd), .ir2dd(ir2dd), .ir2fd(ir2fd), .nn(nn), .sp(sp),
+                .exec_ir2(exec_ir2), 
+                .exec_decbc(exec_decbc), .exec_decb(exec_decb), 
+                .ir1(ir1), .ir2(ir2), .ir1dd(ir1dd), .ir1fd(ir1fd), .ir2dd(ir2dd), .ir2fd(ir2fd), .nn(nn), .sp(sp),
                 .upd_ar(upd_ar), .upd_br(upd_br), .upd_cr(upd_cr), .upd_dr(upd_dr), .upd_er(upd_er), .upd_hr(upd_hr), .upd_lr(upd_lr),.upd_fr(upd_fr),
                 .beq0(br_eq0), .ceq0(cr_eq0),
                 .ar(ar), .fr(fr), .br(br), .cr(cr), .dr(dr), .er(er), .hr(hr), .lr(lr), 
@@ -157,6 +163,9 @@ z80_memstate2 i_z80_memstate2(
                 .int_req_i(int_req_i),
                 .add16(add16),
                 .alu8_out(alu8_out),
+                .adr_alu(adr_alu),   
+                .blk_mv_upd_hl(blk_mv_upd_hl),
+                .blk_mv_upd_de(blk_mv_upd_de),
                 .sh_alu(sh_alu),
                 .bit_alu(bit_alu),
                 .wb_clk_i(wb_clk_i),
@@ -170,6 +179,9 @@ z80_inst_exec i_z80_inst_exec(
                   .upd_ar(upd_ar), .upd_br(upd_br), .upd_cr(upd_cr), .upd_dr(upd_dr), .upd_er(upd_er), .upd_hr(upd_hr), .upd_lr(upd_lr),.upd_fr(upd_fr),
                   .ar(ar), .fr(fr), .br(br), .cr(cr), .dr(dr), .er(er), .hr(hr), .lr(lr), .intr(intr), 
                   .ixr(ixr), .iyr(iyr), .add16(add16), .alu8_out(alu8_out),
+                  .adr_alu(adr_alu),   
+                  .blk_mv_upd_hl(blk_mv_upd_hl),
+                  .blk_mv_upd_de(blk_mv_upd_de),
                    .sh_alu(sh_alu),
                    .bit_alu(bit_alu),
                    .exec_ir2(exec_ir2),

@@ -38,16 +38,19 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //  CVS Log
 //
-//  $Id: z80_testbed.v,v 1.2 2004-05-18 22:31:21 bporcella Exp $
+//  $Id: z80_testbed.v,v 1.3 2004-05-21 02:51:25 bporcella Exp $
 //
-//  $Date: 2004-05-18 22:31:21 $
-//  $Revision: 1.2 $
+//  $Date: 2004-05-21 02:51:25 $
+//  $Revision: 1.3 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.2  2004/05/18 22:31:21  bporcella
+//      instruction test getting to final stages
+//
 //      Revision 1.1  2004/05/13 14:57:35  bporcella
 //      testbed files
 //
@@ -83,7 +86,7 @@ z80_core_top i_z80_core_top(
     .wb_tga_o(wb_tga),
     .wb_ack_i(ack),
     .wb_clk_i(clk),
-    .wb_dat_i(8'b0),
+    .wb_dat_i(io_i),
     .wb_rst_i(rst),
     .bist_ack_o(bist_ack),
     .bist_err_o(bist_err),
@@ -97,23 +100,50 @@ wire [1:0]  wb_tga;
 wire [15:0] wb_adr;
 wire        wb_stb, wb_cyc, wb_we;
 wire [7:0]  wb_dat;
+wire [7:0]    io_i;
+reg [7:0]   out_state;
+
 parameter   TAG_IO    = 2'b01,   // need to review general wb usage to undrstand how best to 
             TAG_INT   = 2'b10;   // document this.
 
-// a pretty simple output device
+parameter   MY_IO_ADR = 8'h10 ;
+// ----------------- a pretty simple I/O device   -------
+//  output simply displays the data written   --  
+//  input cycles through 
+//  various interesting data  patterens as used by the instruction test
+//  namely   7f 55 80 0  ff  aa
 
-wire wr2me = (wb_adr[7:0] == 8'h10) & wb_stb & wb_cyc & (wb_tga == TAG_IO) & wb_we;
+
+assign io_i = (wb_adr[7:0] == MY_IO_ADR) & wb_stb & wb_cyc & (wb_tga == TAG_IO) & !wb_we ?
+                  out_state : 8'hz;
+wire a2me = (wb_adr[7:0] == MY_IO_ADR) & wb_stb & wb_cyc & (wb_tga == TAG_IO);
+
 always @(posedge clk or posedge rst)
 begin
     if (rst )              ack <= 1'b0;
-    else if (wr2me & !ack) 
+    else if (a2me & !ack) 
     begin                  
                            ack <= 1'b1;
-                           $write("%s",wb_dat);      
+                           if (wb_we)    $write("%s",wb_dat);      
     end
-    else                   ack <= 1'b0;
-    
+    else                   ack <= 1'b0;    
 end
+
+always @(posedge clk or posedge rst)
+begin
+    if (rst)              out_state <=  8'h7f;
+    else if (a2me & !wb_we & ack)
+        case (out_state)
+            8'h7f:         out_state <=  8'h55 ;
+            8'h55:         out_state <=  8'h80 ;
+            8'h80:         out_state <=  8'h00 ;
+            8'h00:         out_state <=  8'hff ;
+            8'hff:         out_state <=  8'haa ;
+            8'haa:         out_state <=  8'h7f ;
+            default:       out_state <=  8'h7f ;
+        endcase
+end
+
 
 
 initial

@@ -109,16 +109,19 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: z80_memstate2.v,v 1.4 2004-05-21 02:51:25 bporcella Exp $
+//  $Id: z80_memstate2.v,v 1.5 2004-05-27 14:23:36 bporcella Exp $
 //
-//  $Date: 2004-05-21 02:51:25 $
-//  $Revision: 1.4 $
+//  $Date: 2004-05-27 14:23:36 $
+//  $Revision: 1.5 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.4  2004/05/21 02:51:25  bporcella
+//      inst test  got to the worked macro
+//
 //      Revision 1.3  2004/05/18 22:31:21  bporcella
 //      instruction test getting to final stages
 //
@@ -310,7 +313,8 @@ parameter       DEC_IDLE      = 6'h00,
                 DEC_RET2      = 6'h3a,
                 DEC_EXSPHL    = 6'h3b,
                 DEC_RMWDD1    = 6'h3c,
-                DEC_RMWDD2    = 6'h3d ;
+                DEC_RMWDD2    = 6'h3d, 
+                DEC_INT6      = 6'h3e ;
 //  initial decode assignemnts.   These assignemens are made to wires on an initial decode
 //  to help document next state transitions
 parameter      I1_CB    = 4'h0,
@@ -369,7 +373,7 @@ parameter       MEM_NOP      = 5'h00,
                 MEM_OS_HL_N  = 5'h19,
                              
                 MEM_OSSP_PCM2 = 5'h1a,              // int code  (call 
-                MEM_OSSP_P   = 5'h1b,              //
+                //MEM_OSSP_P   = 5'h1b,              //
                 MEM_INTA     = 5'h1c,
                 MEM_IFINT    = 5'h1d,
                 MEM_DECPC    = 5'h1e ;             
@@ -1155,10 +1159,10 @@ wire src_adr = next_mem_state == MEM_OFADRP1  |
                next_mem_state == MEM_NOP      |
                next_mem_state == MEM_OSADR     ;
 
-wire src_int = next_mem_state == MEM_IOF_N  |
+wire src_io = next_mem_state == MEM_IOF_N  |
                next_mem_state == MEM_IOS_N   ;
                
-                                 
+wire src_int = next_mem_state == MEM_IFINT ;                                 
 
 wire [15:0]  src_mux =   {16{ src_sp  }} & sp                 |
                          {16{ src_pc  }} & pc                 |
@@ -1169,7 +1173,8 @@ wire [15:0]  src_mux =   {16{ src_sp  }} & sp                 |
                          {16{ src_ix  }} & ixr                |
                          {16{ src_iy  }} & iyr                |
                          {16{ src_adr }} & wb_adr_o           |
-                         {16{ src_int }} & { intr, nn[15:8] }  ;
+                         {16{ src_int }} & {intr, nn[15:8] }  |
+                         {16{ src_io }} & { br, nn[15:8] }  ;
                    
 wire block_mv_inc = (dec_state == DEC_ED) ? dec_blk_inc : blk_inc_flg; // flag set at DEC_ED
 
@@ -1183,11 +1188,12 @@ wire inc    =     next_mem_state ==MEM_OFADRP1                |
                   next_mem_state ==MEM_OFSP                   |
                   next_mem_state ==MEM_IFPP1                  |
                   next_mem_state ==MEM_JMPHL                  |
+                  next_mem_state ==MEM_IFINT                  |
                   next_mem_state ==MEM_IFNN                   |
                   next_mem_state ==MEM_OFNN                   |
                   next_mem_state ==MEM_OSNN                   |
-                  next_mem_state ==MEM_RST                  |
-                  next_mem_state ==MEM_OSSP_P                  ;
+                  next_mem_state ==MEM_RST                     ;
+                  //next_mem_state ==MEM_OSSP_P                  ;
 
 wire dec    =     next_mem_state ==MEM_OFHL_PM & ~block_mv_inc |
                   next_mem_state ==MEM_OSHL_PM & ~block_mv_inc |
@@ -1211,13 +1217,14 @@ wire  [15:0] src2    = {16{ inc    }}  & 16'h0001               |
 wire [15:0]  adr_alu     = src2 + src_mux;                 
                   
 
-wire  pre_inc_dec =    next_mem_state ==  MEM_CALL    | 
-                       next_mem_state ==  MEM_OSSP_P  |
-                       next_mem_state ==  MEM_REL2PC  |
-                       next_mem_state ==  MEM_OFIXpD  |
-                       next_mem_state ==  MEM_OSIXpD  |
-                       next_mem_state ==  MEM_OFADRP1 |
-                       next_mem_state ==  MEM_OSADRP1 |
+wire  pre_inc_dec =    next_mem_state ==  MEM_CALL      | 
+                       //next_mem_state ==  MEM_OSSP_P  |
+                       next_mem_state ==  MEM_REL2PC    |
+                       next_mem_state ==  MEM_OFIXpD    |
+                       next_mem_state ==  MEM_OSIXpD    |
+                       next_mem_state ==  MEM_OFADRP1   |
+                       next_mem_state ==  MEM_OSADRP1   |
+                       next_mem_state ==  MEM_OSSP_PCM2 |
                        next_mem_state ==  MEM_OSSP     ;
 
 
@@ -1231,7 +1238,7 @@ assign we_next = next_mem_state == MEM_OS1        |
                  next_mem_state == MEM_OSIXpD     |
                  next_mem_state == MEM_OSADR      |
                  next_mem_state == MEM_OSSP_PCM2  |
-                 next_mem_state == MEM_OSSP_P     |
+                 //next_mem_state == MEM_OSSP_P     |
                  next_mem_state == MEM_CALL       |
                  next_mem_state == MEM_OSNN       |
                  next_mem_state == MEM_OSADRP1    |
@@ -1457,10 +1464,11 @@ begin
         //   guess I'll do it fast  --   just a 16 bit subtractor.  heck silicon is 
         //   cheap.  
         DEC_INT1:       next_state = {DEC_INT2, MEM_OSSP_PCM2, IPIPE_NOP};   //must derement PC
-        DEC_INT2:       next_state = {DEC_INT3, MEM_OSSP_P,   IPIPE_NOP};    //must dec sp and PC  2 ops?
+        DEC_INT2:       next_state = {DEC_INT3, MEM_OSSP,   IPIPE_NOP};      //was MEM_OSSP_P   why? comment out
         DEC_INT3:       next_state = {DEC_INT4, MEM_INTA,     IPIPE_NOP};
         DEC_INT4:       next_state = {DEC_INT5, MEM_NOP,      IPIPE_ENN};
-        DEC_INT5:       next_state = {DEC_IF2,  MEM_IFINT,    IPIPE_NOP};
+        DEC_INT5:       next_state = {DEC_INT6,  MEM_IFINT,    IPIPE_NOP}; // really a pointer fetch -  but treat a a jmpnn
+        DEC_INT6:       next_state = {DEC_RET2, MEM_IFPP1,   IPIPE_ENN};
         DEC_EXSPHL:     next_state = {DEC_PUSH, MEM_OSSP,     IPIPE_NOP};
         DEC_RMWDD1:     next_state = {DEC_RMW,  MEM_OFIXpD,       IPIPE_EN1};
         default:        next_state = {DEC_IDLE, MEM_NOP,      IPIPE_NOP};
@@ -1541,7 +1549,7 @@ always @(posedge wb_clk_i)
 always @(posedge wb_clk_i)
     if (dec_state == DEC_ED)           blk_rpt_flg <= dec_blk_rpt;
     else if (dec_state == DEC_EXEC)    blk_rpt_flg <= 1'b0;
-
+    else if (dec_state == DEC_INT1)    blk_rpt_flg <= 1'b0;
 
 always @(posedge wb_clk_i)
     if (dec_state == DEC_ED)           blk_io_flg <= dec_blk_io;
@@ -1632,8 +1640,11 @@ wire ir2_cb_shift =  (ir2[9:6] == 4'b01_00) ; // I'll hand or the 8 defined term
 wire ir2_cb_bit   =  (ir2[9:6] ==  CB_RES ) |
                      (ir2[9:6] ==  CB_SET )  ;
 
-
-wire [15:0] pc_12 = pc -  ( (DEC_INT1 == dec_state ) ? 16'h2 : 16'h1 );
+wire [15:0] dec_const  = (DEC_INT1 == dec_state) & blk_rpt_flg ? 16'h3 :
+                         (DEC_INT1 == dec_state)               ? 16'h2 :
+                                                                 16'h1  ;
+                                                          
+wire [15:0] pc_123 = pc -  dec_const;
 
 //  bjp comment   --   logic here is getting pretty slow  --- the else if's are out of 
 //  line   need to get this cleaned up for synthesis  --  but first get it logically 
@@ -1647,7 +1658,7 @@ always @(posedge wb_clk_i or posedge rst_i)
         if ( we_next & flag_os1 & ~blk_rpt_flg)              nn <= { nn[7:0], nn[15:8] } ;
         
         else if( next_mem_state == MEM_CALL)                 nn <= {pc};
-        else if( next_mem_state == MEM_OSSP_PCM2)            nn <= {pc_12};
+        else if( next_mem_state == MEM_OSSP_PCM2)            nn <= {pc_123};
         else if(EXs6SP7_HL== ir2 & ir2dd & exec_ir2)         nn <= ixr;
         else if(EXs6SP7_HL== ir2 & ir2fd & exec_ir2)         nn <= iyr;
         else if(EXs6SP7_HL== ir2         & exec_ir2)          nn <= hl;
@@ -1703,7 +1714,7 @@ always @(posedge wb_clk_i or posedge rst_i)
         if (next_mem_state == MEM_OSSP_PCM2) pc <= { 10'h0, ir1[5:3], 3'h0} ;
         if (next_mem_state == MEM_IFNN ) pc <= adr_alu;    //on jumps get adr+1 in pc immediately. 
         if (next_mem_state == MEM_REL2PC) pc <= adr_alu;
-        if (next_mem_state == MEM_IFINT) pc <= src_mux;
+        if (next_mem_state == MEM_IFINT) pc <= adr_alu;  // like a jump  need adr+1 here
     end
 
 //---------------------------------- sp -----------------------------------------------------
@@ -1743,7 +1754,7 @@ begin
          if (next_mem_state == MEM_OFSP      ) sp <= adr_alu;
          if (next_mem_state == MEM_OSSP      ) sp <= adr_alu;
          if (next_mem_state == MEM_OSSP_PCM2 ) sp <= adr_alu;
-         if (next_mem_state == MEM_OSSP_P    ) sp <= adr_alu;
+         //if (next_mem_state == MEM_OSSP_P    ) sp <= adr_alu;
          if (next_mem_state == MEM_CALL      ) sp <= adr_alu;
     end
 end
@@ -1773,7 +1784,6 @@ always @(posedge wb_clk_i or posedge rst_i)
     begin
         if      ((dec_state == DEC_EXEC) & (DI== ir1))  int_en <= 1'b0;
         else if ((dec_state == DEC_EXEC) & en_int_next) int_en <= 1'b1; 
-        else if ((dec_state == DEC_ED)   & ed_retn)     int_en <= 1'b0;
         if      (dec_state == DEC_INT1)                 int_en <= 1'b0;
     end
 
@@ -1782,8 +1792,9 @@ always @(posedge wb_clk_i or posedge rst_i)
     if (rst_i)                                      en_int_next <=1'b0;
     else if (wb_rdy_nhz)
     begin
-        if ((dec_state == DEC_EXEC) & (EI== ir1)) en_int_next <=1'b1;
-        else if (dec_state == DEC_EXEC)           en_int_next <=1'b0;
+        if ((dec_state == DEC_EXEC) & (EI== ir1))       en_int_next <=1'b1;
+        else if ((dec_state == DEC_RET ) & (ED_RETI == ir2)) en_int_next <=1'b1;
+        else if (dec_state == DEC_EXEC)                 en_int_next <=1'b0;
     end
     
 always @(posedge wb_clk_i)  

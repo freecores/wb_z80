@@ -4,7 +4,6 @@ rtl\z80_bist_logic.v
 rtl\z80_core_top.v
 rtl\z80_inst_exec.v
 rtl\z80_memstate2.v
-rtl\z80_sdram_cfg.v
-rtl\generic_spram.v
+rtl\z80_sram.v
 
 

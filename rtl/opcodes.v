@@ -64,16 +64,19 @@
 //
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: opcodes.v,v 1.3 2004-05-21 02:51:25 bporcella Exp $
+//  $Id: opcodes.v,v 1.4 2004-05-27 14:23:36 bporcella Exp $
 //
-//  $Date: 2004-05-21 02:51:25 $
-//  $Revision: 1.3 $
+//  $Date: 2004-05-27 14:23:36 $
+//  $Revision: 1.4 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.3  2004/05/21 02:51:25  bporcella
+//      inst test  got to the worked macro
+//
 //      Revision 1.2  2004/05/18 22:31:20  bporcella
 //      instruction test getting to final stages
 //
@@ -430,6 +433,7 @@ parameter  NOP          = 10'h00,//      NOP         ; 00
         ED_LDsREG_6NN7 =    8'b1001__1011, // compair with {ir[9:6],ir[3:0]}  REG = BC,DE,HL,SP
         ED_NEG         =    7'b1001___100, // compair with {ir[9:6],ir[2:0]}  all A<= -A                  
         ED_RETN        =    7'b1001___101, // compair with {ir[9:6],ir[2:0]} and !reti
+        ED_RETI        =  10'h24D, 
         
         DBL_REG_BC   = 2'b00,  // compair with ir[5:4]
         DBL_REG_DE   = 2'b01,  // compair with ir[5:4]

@@ -1,10 +1,11 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////
 ////                                                                                           
-////  file name:   z80_sdram_cfg                                                                   
-////  description: configure address range and mux data for on-board sdram                                          
-////  project:     wb_z80                                                                                       ////
-////                                                                                           
-////  Author: B.J. Porcella                                                                    
+////   file name:    z80_sram.v                                                                             
+////   description: simple static SRAM                                                                                    
+////   project:     wb_z80
+////
+////
+////   Author: B.J. Porcella                                                                   
 ////          bporcella@sbcglobal.net                                                          
 ////                                                                                           
 ////                                                                                           
@@ -35,59 +36,93 @@
 //// POSSIBILITY OF SUCH DAMAGE.                                                               
 ////                                                                                           
 ///////////////////////////////////////////////////////////////////////////////////////////////
+//
+//  DESCRIPTION:
+//  This file was intended to be a generic sram module  -- and started out as generic_spram.v
+//  However,  the generic_spram.v device contained not only an address register, but also a 
+//  data register.   I guess in retrospect that I could design around that ----   by deleting the
+//  address register of the z80 and also the data output register of the z80 and use the 
+//  registers of the "generic_spram" for those functions.   
+//
+//  I have opted to hack my own model of a register array.  
+//  (which I know can be reasonably synthesized in most technologies).   
+//  Accordingly, I decided to re-name the file   -- it is very different 
+//  in its behavior  --  there should be no mis-understanding here.
+//
+//  If this actually causes synthesis problems, please let me know.  I will try to help.
+//   bj
+//  
+//
+//
 //  CVS Log
 //
-//  $Id: z80_sdram_cfg.v,v 1.2 2004-05-27 14:23:36 bporcella Exp $
+//  $Id: z80_sram.v,v 1.1 2004-05-27 14:28:55 bporcella Exp $
 //
-//  $Date: 2004-05-27 14:23:36 $
-//  $Revision: 1.2 $
+//  $Date: 2004-05-27 14:28:55 $
+//  $Revision: 1.1 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
-//      Revision 1.1  2004/04/27 21:27:13  bporcella
-//      first core build
-//
 //      Revision 1.1.1.1  2004/04/13 23:47:42  bporcella
 //      import first files
 //
 //
 //
 //-------1---------2---------3--------Module Name and Port List------7---------8---------9--------0
-module  z80_sdram_cfg (cfg_ce_spram_o, cfg_do, cfg_ack_o, wb_adr_i, sdram_di, wb_dat_i, wb_ack_i, 
-                       wb_stb_i, wb_cyc_i, wb_tga_i);
+
+module z80_sram(
+    // Generic synchronous single-port RAM interface
+    clk, rst, ce, we, oe, addr, di, do
+);
+
+    //
+    // Default address and data buses width
+    //
+    parameter aw = 15; //number of address-bits
+    parameter dw = 8; //number of data-bits
+
+    //
+    // Generic synchronous single-port RAM interface
+    //
 
 
 //-------1---------2---------3--------Output Ports---------6---------7---------8---------9--------0
-output          cfg_ce_spram_o;
-output [7:0]    cfg_do;
-output          cfg_ack_o;
+    output [dw-1:0] do;   // output data bus
 
 //-------1---------2---------3--------Input Ports----------6---------7---------8---------9--------0
-
-input [15:0]    wb_adr_i;
-input [7:0]     sdram_di, wb_dat_i;
-input           wb_ack_i;
-input           wb_stb_i;
-input           wb_cyc_i;
-input [1:0]     wb_tga_i; 
-
+    input           clk;  // Clock, rising edge
+    input           rst;  // Reset, active high
+    input           ce;   // Chip enable input, active high
+    input           we;   // Write enable input, active high
+    input           oe;   // Output enable input, active high
+    input  [aw-1:0] addr; // address bus inputs
+    input  [dw-1:0] di;   // input data bus
 //-------1---------2---------3--------Parameters-----------6---------7---------8---------9--------0
 //-------1---------2---------3--------Wires------5---------6---------7---------8---------9--------0
 //-------1---------2---------3--------Registers--5---------6---------7---------8---------9--------0
 //-------1---------2---------3--------Assignments----------6---------7---------8---------9--------0
-
-//  this assigns the low half of the address space to the on-board sdram.  Any given implementation
-//  might well wish to modify this assigmnment
-//  Lot of I/O for not much logic  ---  guess if there were no "rules" I would simply put this stuff
-//  in the top level. 
-
-
-
-
 //-------1---------2---------3--------State Machines-------6---------7---------8---------9--------0
+
+
+reg  [dw-1:0] mem [(1<<aw)-1:0];    // RAM content
+
+// bjp  change  was
+//reg  [aw-1:0] raddr;             // RAM read address
+//wire raddr = addr;
+//
+// Data output drivers
+//
+assign do =  mem[addr];
+
+
+
+// write operation
+always@(posedge clk)
+    if (ce && we)
+        mem[addr] <=  di;
 
 
 

@@ -71,16 +71,19 @@
 // 
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: inst_exec.v,v 1.3 2004-04-19 05:09:11 bporcella Exp $
+//  $Id: inst_exec.v,v 1.4 2004-04-19 19:13:27 bporcella Exp $
 //
-//  $Date: 2004-04-19 05:09:11 $
-//  $Revision: 1.3 $
+//  $Date: 2004-04-19 19:13:27 $
+//  $Revision: 1.4 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.3  2004/04/19 05:09:11  bporcella
+//      fixed some lint problems  --
+//
 //      Revision 1.2  2004/04/18 18:50:08  bporcella
 //      fixed some lint problems  --
 //
@@ -128,7 +131,7 @@ input        fd_grp;
 
 //-------1---------2---------3--------Wires----------------6---------7---------8---------9--------0
 
-wire [7:0]   src_pqr;    //  arithmetic sources gven by ir2[2:0]
+//wire [7:0]   src_pqr;    //  arithmetic sources gven by ir2[2:0]
 wire [7:0]   src_hr ;
 wire [7:0]   src_lr ;
 //wire [7:0]   alu_out;  // {CF. 8bit_result}
@@ -152,7 +155,7 @@ wire  [15:0]  src_dbl         ;
 wire  [7:0]   alu8_fr         ;
 wire          alu8_nf         ;
 wire          c_8out7         ;
-wire          alu8_cry        ;
+//wire          alu8_cry        ;
 wire          alu8_hcry       ;
 wire  [7:0]   alu8_out        ;
 wire          add16_ofl       ;
@@ -237,7 +240,7 @@ assign  src_pqr20 = {8{ir2[2:0]==REG8_B   }} & br     |
                     {8{ir2[2:0]==REG8_E   }} & er     |
                     {8{ir2[2:0]==REG8_H   }} & src_hr |
                     {8{ir2[2:0]==REG8_L   }} & src_lr |
-                    {8{ir2[2:0]==REG8_MEM}} & nn[7:0] |
+                    {8{ir2[2:0]==REG8_MEM}} & nn[15:8] |
                     {8{ir2[2:0]==REG8_A   }} & ar      ;
                     
 assign src_pqr53 =  {8{ir2[5:3]==REG8_B   }} & br     |
@@ -246,7 +249,7 @@ assign src_pqr53 =  {8{ir2[5:3]==REG8_B   }} & br     |
                     {8{ir2[5:3]==REG8_E   }} & er     |
                     {8{ir2[5:3]==REG8_H   }} & src_hr |
                     {8{ir2[5:3]==REG8_L   }} & src_lr |
-                    {8{ir2[5:3]==REG8_MEM}} & nn[7:0] |
+                    {8{ir2[5:3]==REG8_MEM}} & nn[15:8] |
                     {8{ir2[5:3]==REG8_A   }} & ar      ;
 
 
@@ -255,10 +258,10 @@ assign src_dbl =   {16{ir2[5:4]==2'b00}} & {br, cr}  |
                    {16{ir2[5:4]==2'b10}} & src_dblhr |   // HL, ixr, iyr
                    {16{ir2[5:4]==2'b11}} & sp         ;
 
-
-
-
-
+assign sh_src =   ir2[8] & dd_grp ?  nn[15:8]   :
+                  ir2[8] & fd_grp ?  nn[15:8]   :
+                  ir2             ?  src_pqr20  :
+                                     ar          ;
 // I wonder how well the synthesizer can reduce this??? - It is probably worth spending
 // some time during physical design to see if a more low level description would help --
 // there is somebody out there who knows  -  and there is probably a good low level description.
@@ -324,22 +327,22 @@ assign {c_8out7, add_8bit[7:4]} = {1'b0, src_aor_cnst[7:4]} + {1'b0, src_pqri[7:
 //  making ed_blk_cp high priority kind of negates the origional idea of making the
 //  decodes fast here  ---   course when all is included this can't be too fast.
 //  Just note for syntheses that this is a slow path that could be improved with some thought.
-//
+//         1         1          8          8        1
 assign {alu8_cry, alu8_hcry, alu8_out,  src_pqri, c_8in0 }=
    
    ed_blk_cp ?                         {c_8out7,c_8out3,  add_8bit,   ~src_pqr20, 1'h1} :   //CPI CPIR CPD CPDR
 
-   {14{ir2[7:3]==5'b10000}}         & ({c_8out7,c_8out3,  add_8bit,    src_pqr20, 1'b0} )  |// a+src
-   {14{ir2[7:3]==5'b10001}}         & ({c_8out7,c_8out3,  add_8bit,    src_pqr20,   cf} )  |// a+src+cf
-   {14{ir2[7:3]==5'b10010}}         & ({c_8out7,c_8out3,  add_8bit,   ~src_pqr20, 1'h1} )  |// a-src
-   {14{ir2[7:3]==5'b10011}}         & ({c_8out7,c_8out3,  add_8bit,   ~src_pqr20, ~cf } )  |// a-src-cf
-   {14{ir2[7:3]==5'b10100}}         & ({1'b0   ,1'b1   , ar & src_pqr, src_pqr20, 1'b0} )  |// a&src
-   {14{ir2[7:3]==5'b10101}}         & ({1'b0   ,1'b0   , ar ^ src_pqr, src_pqr20, 1'b0} )  |// a^src
-   {14{ir2[7:3]==5'b10110}}         & ({1'b0   ,1'b0   , ar | src_pqr, src_pqr20, 1'b0} )  |// a|src
-   {14{ir2[7:3]==5'b10111}}         & ({c_8out7,c_8out3,  add_8bit,    src_pqr20,  1'h1})  |// a-src
-   {14{(ir2[7:6]==2'b00)& ~ir2[0] }}& ({     cf,c_8out3,  add_8bit,    src_pqr53,  1'h1})  |// inc_r main
-   {14{(ir2[7:6]==2'b00)&  ir2[0] }}& ({     cf,c_8out3,  add_8bit,    src_pqr53,  1'h0})  |// dec_r
-   {14{(ir2[7:6]==2'b01)          }}& ({c_8out7,c_8out3,  add_8bit,          ~ar,  1'h1})  ;// ed44 -a
+   {19{ir2[7:3]==5'b10000}}         & ({c_8out7,c_8out3,  add_8bit,    src_pqr20, 1'b0} )  |// a+src
+   {19{ir2[7:3]==5'b10001}}         & ({c_8out7,c_8out3,  add_8bit,    src_pqr20,   cf} )  |// a+src+cf
+   {19{ir2[7:3]==5'b10010}}         & ({c_8out7,c_8out3,  add_8bit,   ~src_pqr20, 1'h1} )  |// a-src
+   {19{ir2[7:3]==5'b10011}}         & ({c_8out7,c_8out3,  add_8bit,   ~src_pqr20, ~cf } )  |// a-src-cf
+   {19{ir2[7:3]==5'b10100}}         & ({1'b0   ,1'b1   , ar & src_pqr20, src_pqr20, 1'b0} )  |// a&src
+   {19{ir2[7:3]==5'b10101}}         & ({1'b0   ,1'b0   , ar ^ src_pqr20, src_pqr20, 1'b0} )  |// a^src
+   {19{ir2[7:3]==5'b10110}}         & ({1'b0   ,1'b0   , ar | src_pqr20, src_pqr20, 1'b0} )  |// a|src
+   {19{ir2[7:3]==5'b10111}}         & ({c_8out7,c_8out3,  add_8bit,    src_pqr20,  1'h1})  |// a-src
+   {19{(ir2[7:6]==2'b00)& ~ir2[0] }}& ({     cf,c_8out3,  add_8bit,    src_pqr53,  1'h1})  |// inc_r main
+   {19{(ir2[7:6]==2'b00)&  ir2[0] }}& ({     cf,c_8out3,  add_8bit,    src_pqr53,  1'h0})  |// dec_r
+   {19{(ir2[7:6]==2'b01)          }}& ({c_8out7,c_8out3,  add_8bit,          ~ar,  1'h1})  ;// ed44 -a
 
 
 // do some hand  decoding here                                        
@@ -355,7 +358,7 @@ assign {alu8_cry, alu8_hcry, alu8_out,  src_pqri, c_8in0 }=
 // ---------------- 16 bit adder with bit 11 carrry out and bit 8 carry in ------------------
 //
 assign add16_ofl = (src_a[15] == src_b[15]) & (src_a[15] != add16[15]);
-
+ ///tmp/lint/wb_z80/rtl/inst_exec.v(363): Warning 22014: synchronous loop without set/reset detected on signal "src_b[11:8]" (OC)
 assign {c_16out7,  add16[7:0]}  = {1'b0, src_a[7:0]}   + {1'b0, src_b[7:0]   } + {8'b0, c_16in0};
 assign {c_16out11, add16[11:8]} = {1'b0, src_a[11:8]}  + {1'b0, src_b[11:8]  } + {4'b0, c_16out7};
 assign {c_16out15, add16[15:12]} = {1'b0, src_a[15:12]} + {1'b0, src_b[15:12]} + {4'b0, c_16out11};
@@ -505,7 +508,7 @@ assign up_a_n =
     LDsA_6DE7    == ir2 | //      LD A,(DE)    ; 1A
     LDsA_6NN7    == ir2 | //      LD A,(NN)    ; 3A XX XX
     INsA_6N7     == ir2 | //      IN A,(N)     ; DB XX        
-    (ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_A) ;
+    (ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_A) ;
 
 
 //EXsAF_AFp    = 10'h08,//      EX AF,AF'    ; 08
@@ -514,7 +517,7 @@ assign up_a_n =
 //CPL          = 10'h2F,//      CPL          ; 2F   a <= ~a
 //POPsAF       = 10'hF1,//      POP AF       ; F1
 //  don't forget these beauties  not affected by prefixes
-//ED_RRD       =  'h67//      RRD        ;  compair with {ir2[9:6],ir2[3:0]} all 
+//ED_RRD       =  'h67//      RRD        ;  
 //ED_RLD       =  'h6F//      RLD        ; ED 6F   nibble roates A (HL)
 //ED_NEG         =    5'b01___100, // A<= -A   compair with {ir2[9:6],ir2[2:0]}                
 
@@ -523,14 +526,14 @@ assign up_a_n =
 assign upd_ar = upd_a_alu8 | up_a_sh_alu | up_a_src_pqr | up_a_n |  ir2 == EXsAF_AFp |
                 ir2 == EXX | ir2 == DAA  | ir2 == CPL   | ir2 == POPsAF | 
                 ir2[2:0] == REG8_A & bit_alu_act | ir2[2:0] == REG8_A & sh_alu_act |
-                {ir2[9:6], ir2[3:0]} == ED_RRD | {ir2[9:6], ir2[2:0]} == ED_NEG | 
+                {ir2== ED_RRD | {ir2[9:6], ir2[2:0]} == ED_NEG | 
                 ir2 == ED_LDsA_I ;
                 
 always @(posedge clk)
 begin
     if (upd_a_alu8 & exec_ir2)       ar <= alu8_out;
     if (up_a_sh_alu & exec_ir2)      ar <= sh_alu; 
-    if (up_a_src_pqr & exec_ir2)     ar <= src_pqr;
+    if (up_a_src_pqr & exec_ir2)     ar <= src_pqr20;
     if (up_a_n  & exec_ir2)          ar <= nn[7:0];
     if (ir2 == EXsAF_AFp & exec_ir2) ar <= ap; 
     if (ir2 == EXX & exec_ir2)       ar <= ap;
@@ -541,8 +544,8 @@ begin
              bit_alu_act & exec_ir2) ar <= bit_alu;
     if (ir2[2:0] == REG8_A & 
              sh_alu_act & exec_ir2)  ar <= sh_alu;
-    if ({ir2[9:6], ir2[3:0]} == ED_RRD & exec_ir2) ar[3:0] <= nn[3:0];         
-    if ({ir2[9:6], ir2[3:0]} == ED_RLD & exec_ir2) ar[3:0] <= nn[7:4];
+    if (ir2 == ED_RRD & exec_ir2) ar[3:0] <= nn[3:0];         
+    if (ir2 == ED_RLD & exec_ir2) ar[3:0] <= nn[7:4];
     if ({ir2[9:6], ir2[2:0]} == ED_NEG & exec_ir2) ar <= alu8_out;  // ED44 this done by alu8 for flags
     if (ir2 == ED_LDsA_I & exec_ir2) ar <= ir2[7:0] ;
 end
@@ -603,13 +606,13 @@ assign up_b_add16 =
 assign upd_br = upd_b_alu8 | up_b_src_pqr | up_b_add16 | LDsBC_NN  == ir2 | 
                 POPsBC    == ir2 | EXX       == ir2 | LDsB_N    == ir2    | 
                 ir2[2:0] == REG8_B & bit_alu_act | ir2[2:0] == REG8_B & sh_alu_act |
-                DJNZs$t2  == ir2 | (ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_B);
+                DJNZs$t2  == ir2 | (ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_B);
 
 
 always @(posedge clk)
 begin
     if ( upd_b_alu8 & exec_ir2)        br <= alu8_out;
-    if ( up_b_src_pqr & exec_ir2)      br <= src_pqr;
+    if ( up_b_src_pqr & exec_ir2)      br <= src_pqr20;
     if ( up_b_add16   & exec_ir2)      br <= add16[15:8];
     if ( LDsBC_NN  == ir2 & exec_ir2)  br <= nn[15:8];
     if ( POPsBC    == ir2 & exec_ir2)  br <= nn[15:8];
@@ -651,20 +654,20 @@ assign up_c_src_pqr =
 //LDsBC_NN     = 10'h01,//      LD BC,NN    ; 01 XX XX
 //POPsBC       = 10'hC1,//      POP BC       ; C1
 //EXX          = 10'hD9,//      EXX          ; D9
-//ED_INsREG_6C7  =    5'b01___000,// compair with {ir2[7:6],ir2[2:0]} really (BCio)
+//ED_INsREG_6C7  =    5'b01___000,// compair with {ir2[9:6],ir2[2:0]} really (BCio)
 
 //------------------------------- cr -----------------------------------------
 assign upd_cr = upd_c_alu8 | up_c_src_pqr | up_c_add16 | LDsBC_NN  == ir2 | 
                 POPsBC    == ir2 | EXX       == ir2 | LDsC_N    == ir2    | 
                 ir2[2:0] == REG8_C & bit_alu_act | ir2[2:0] == REG8_C & sh_alu_act |
-                (ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_C);
+                (ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_C);
 
 
 
 always @(posedge clk)
 begin
     if ( upd_c_alu8 & exec_ir2)        cr <= alu8_out;
-    if ( up_c_src_pqr & exec_ir2)      cr <= src_pqr;
+    if ( up_c_src_pqr & exec_ir2)      cr <= src_pqr20;
     if ( up_c_add16   & exec_ir2)      cr <= add16[7:0];
     if ( LDsBC_NN  == ir2 & exec_ir2)  cr <= nn[7:0];
     if ( POPsBC    == ir2 & exec_ir2)  cr <= nn[7:0];
@@ -675,7 +678,7 @@ begin
     if (ir2[2:0] == REG8_C & 
              sh_alu_act & exec_ir2)    cr <= sh_alu;  
     if ( exec_decbc)                   cr <= decc_alu;
-    if ((ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_C) & exec_ir2)    
+    if ((ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_C) & exec_ir2)    
                                            cr <= nn[7:0];    
     
 end
@@ -683,12 +686,12 @@ end
 
 //  update dr
 assign up_d_add16 =
-    INCsDE       == 10'h13 |  //      INC DE       ; 13
-    DECsDE       == 10'h1B  ; //      DEC DE       ; 1B
+    INCsDE       == ir2 |  //      INC DE       ; 13
+    DECsDE       == ir2  ; //      DEC DE       ; 1B
 
 assign upd_d_alu8 =
-    INCsD        == 10'h14 |  //      INC D        ; 14
-    DECsD        == 10'h15  ; //      DEC D        ; 15
+    INCsD        == ir2 |  //      INC D        ; 14
+    DECsD        == ir2  ; //      DEC D        ; 15
 assign up_d_src_pqr =
     LDsD_B       == ir2 |      //LD D,B       ; 50
     LDsD_C       == ir2 |      //LD D,C       ; 51
@@ -705,14 +708,14 @@ assign up_d_src_pqr =
 //POPsDE       = 10'hD1,//      POP DE       ; D1
 //EXX          = 10'hD9,//      EXX          ; D9
 //EXsDE_HL     = 10'hEB,//      EX DE,HL     ; EB
-//ED_INsREG_6C7  =    5'b01___000,// compair with {ir2[7:6],ir2[2:0]} really (BCio)
+//ED_INsREG_6C7  =    5'b01___000,// compair with {ir2[9:6],ir2[2:0]} really (BCio)
 
 //---------------------------------- dr ------------------------------------
 
 assign upd_dr = upd_d_alu8 | up_d_src_pqr | up_d_add16 | LDsDE_NN  == ir2 | 
                 POPsDE    == ir2 | EXX       == ir2 | EXsDE_HL == ir2 | LDsD_N    == ir2 | 
                 ir2[2:0] == REG8_D & bit_alu_act | ir2[2:0] == REG8_D & sh_alu_act |
-                 (ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_D);
+                 (ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_D);
 
 
 
@@ -722,7 +725,7 @@ assign upd_dr = upd_d_alu8 | up_d_src_pqr | up_d_add16 | LDsDE_NN  == ir2 |
 always @(posedge clk)
 begin
     if ( upd_d_alu8 & exec_ir2)        dr <= alu8_out;
-    if ( up_d_src_pqr & exec_ir2)      dr <= src_pqr;
+    if ( up_d_src_pqr & exec_ir2)      dr <= src_pqr20;
     if ( up_d_add16   & exec_ir2)      dr <= add16[15:8];
     if ( LDsDE_NN  == ir2 & exec_ir2)  dr <= nn[15:8];
     if ( POPsDE    == ir2 & exec_ir2)  dr <= nn[15:8];
@@ -733,7 +736,7 @@ begin
              bit_alu_act & exec_ir2)   dr <= bit_alu;
     if (ir2[2:0] == REG8_D & 
              sh_alu_act & exec_ir2)    dr <= sh_alu;  
-    if ((ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) 
+    if ((ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) 
          & (ir2[5:3] == REG8_D) & exec_ir2)             
                                         dr <= nn[7:0];
 
@@ -761,7 +764,7 @@ assign up_e_src_pqr =
 //POPsDE       = 10'hD1,//      POP DE       ; D1
 //EXX          = 10'hD9,//      EXX          ; D9
 //EXsDE_HL     = 10'hEB,//      EX DE,HL     ; EB
-//ED_INsREG_6C7  =    5'b01___000,// compair with {ir2[7:6],ir2[2:0]} really (BCio)
+//ED_INsREG_6C7  =    5'b01___000,// compair with {ir2[9:6],ir2[2:0]} really (BCio)
 
 //---------------------------------- er ------------------------------------
 
@@ -769,7 +772,7 @@ assign up_e_src_pqr =
 assign upd_er = upd_e_alu8 | up_e_src_pqr | up_e_add16 | LDsDE_NN  == ir2 | 
                 POPsDE    == ir2 | EXX       == ir2 | EXsDE_HL == ir2 | LDsD_N    == ir2 | 
                 ir2[2:0] == REG8_E & bit_alu_act | ir2[2:0] == REG8_E & sh_alu_act |
-                 (ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_E);
+                 (ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_E);
 
 
 
@@ -782,7 +785,7 @@ assign upd_er = upd_e_alu8 | up_e_src_pqr | up_e_add16 | LDsDE_NN  == ir2 |
 always @(posedge clk)
 begin
     if ( upd_e_alu8 & exec_ir2)        er <= alu8_out;
-    if ( up_e_src_pqr & exec_ir2)      er <= src_pqr;
+    if ( up_e_src_pqr & exec_ir2)      er <= src_pqr20;
     if ( up_e_add16   & exec_ir2)      er <= add16[7:0];
     if ( LDsDE_NN  == ir2 & exec_ir2)  er <= nn[7:0];
     if ( POPsDE    == ir2 & exec_ir2)  er <= nn[7:0];
@@ -793,7 +796,7 @@ begin
              bit_alu_act & exec_ir2)   er <= bit_alu;
     if (ir2[2:0] == REG8_E & 
              sh_alu_act & exec_ir2)    er <= sh_alu;
-    if ((ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_E) & exec_ir2)              
+    if ((ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_E) & exec_ir2)              
                                            er <= nn[7:0];             
              
 end
@@ -819,7 +822,7 @@ assign upd_h_src_pqr =
     LDsH_L       == ir2 | //      LD H,L       ; 65
     LDsH_6HL7    == ir2 | //      LD H,(HL)    ; 66
     LDsH_A       == ir2 ; //      LD H,A       ; 67
-//ED_INsREG_6C7  =    5'b01___000,// compair with {ir2[7:6],ir2[2:0]} really (BCio)
+//ED_INsREG_6C7  =    5'b01___000,// compair with {ir2[9:6],ir2[2:0]} really (BCio)
 
 //POPsHL       = 10'hE1,//      POP HL       ; E1
 //EXs6SP7_HL   = 10'hE3,//      EX (SP),HL   ; E3
@@ -839,7 +842,7 @@ assign upd_h_src_pqr =
 assign upd_hr = upd_h_alu8 | upd_h_src_pqr | up_h_add16 | LDsHL_NN  == ir2 | LDsHL_6NN7== ir2 |
                 POPsHL    == ir2 | EXX       == ir2 | EXsDE_HL == ir2 | LDsH_N    == ir2 | 
                 ir2[2:0] == REG8_H & bit_alu_act | ir2[2:0] == REG8_H & sh_alu_act |
-                 (ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_H);
+                 (ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_H);
 
 
 
@@ -849,7 +852,7 @@ wire exec_hlir2 = exec_ir2 & !(dd_grp | fd_grp);
 always @(posedge clk)
 begin
     if ( upd_h_alu8 & exec_hlir2)        hr <= alu8_out;
-    if ( upd_h_src_pqr & exec_hlir2)      hr <= src_pqr;
+    if ( upd_h_src_pqr & exec_hlir2)      hr <= src_pqr20;
     if ( up_h_add16   & exec_hlir2)      hr <= add16[15:8];
     if ( LDsHL_NN  == ir2 & exec_hlir2)  hr <= nn[15:8];
     if ( LDsHL_6NN7== ir2 & exec_hlir2)  hr <= nn[15:8];
@@ -862,7 +865,7 @@ begin
              bit_alu_act & exec_hlir2)   hr <= bit_alu;
     if (ir2[2:0] == REG8_H & 
              sh_alu_act & exec_hlir2)    hr <= sh_alu;  
-    if ((ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_H) & exec_ir2)              
+    if ((ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_H) & exec_ir2)              
                                            hr <= nn[7:0];
 
 end
@@ -902,14 +905,14 @@ assign upd_l_src_pqr =
 assign upd_lr = upd_l_alu8 | upd_l_src_pqr | up_l_add16 | LDsHL_NN  == ir2 | LDsHL_6NN7== ir2 |
                 POPsHL    == ir2 | EXX       == ir2 | EXsDE_HL == ir2 | LDsL_N    == ir2 | 
                 ir2[2:0] == REG8_L & bit_alu_act | ir2[2:0] == REG8_L & sh_alu_act |
-                 (ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_L);
+                 (ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_L);
 
 
 
 always @(posedge clk)
 begin
     if ( upd_l_alu8 & exec_hlir2)        lr <= alu8_out;
-    if ( upd_l_src_pqr & exec_hlir2)      lr <= src_pqr;
+    if ( upd_l_src_pqr & exec_hlir2)      lr <= src_pqr20;
     if ( up_l_add16   & exec_hlir2)      lr <= add16[7:0];
     if ( LDsHL_NN  == ir2 & exec_hlir2)  lr <= nn[7:0];
     if ( LDsHL_6NN7== ir2 & exec_hlir2)  lr <= nn[7:0];
@@ -922,7 +925,7 @@ begin
              bit_alu_act & exec_hlir2)   lr <= bit_alu;
     if (ir2[2:0] == REG8_L & 
              sh_alu_act & exec_hlir2)    lr <= sh_alu;
-    if ((ED_INsREG_6C7 == {ir2[7:6],ir2[2:0]}) & (ir2[5:3] == REG8_L) & exec_ir2)              
+    if ((ED_INsREG_6C7 == {ir2[9:6],ir2[2:0]}) & (ir2[5:3] == REG8_L) & exec_ir2)              
                                            lr <= nn[7:0];             
              
 end
@@ -931,7 +934,7 @@ wire exec_ixir2 = exec_ir2 & dd_grp;
 always @(posedge clk)
 begin
     if ( upd_l_alu8 & exec_ixir2)        ixr[7:0] <= alu8_out;
-    if ( upd_l_src_pqr & exec_ixir2)      ixr[7:0] <= src_pqr;
+    if ( upd_l_src_pqr & exec_ixir2)      ixr[7:0] <= src_pqr20;
     if ( up_l_add16   & exec_ixir2)      ixr[7:0] <= add16[7:0];
     if ( LDsHL_NN  == ir2 & exec_ixir2)  ixr[7:0] <= nn[7:0];
     if ( LDsHL_6NN7== ir2 & exec_ixir2)  ixr[7:0] <= nn[7:0];
@@ -949,7 +952,7 @@ end
 always @(posedge clk)
 begin
     if ( upd_h_alu8 & exec_ixir2)        ixr[15:8] <= alu8_out;
-    if ( upd_h_src_pqr & exec_ixir2)      ixr[15:8] <= src_pqr;
+    if ( upd_h_src_pqr & exec_ixir2)      ixr[15:8] <= src_pqr20;
     if ( up_h_add16   & exec_ixir2)      ixr[15:8] <= add16[15:8];
     if ( LDsHL_NN  == ir2 & exec_ixir2)  ixr[15:8] <= nn[15:8];
     if ( LDsHL_6NN7== ir2 & exec_ixir2)  ixr[15:8] <= nn[15:8];
@@ -969,7 +972,7 @@ wire exec_iyir2 = exec_ir2 & fd_grp;
 always @(posedge clk)
 begin
     if ( upd_l_alu8 & exec_iyir2)        iyr[7:0] <= alu8_out;
-    if ( upd_l_src_pqr & exec_iyir2)      iyr[7:0] <= src_pqr;
+    if ( upd_l_src_pqr & exec_iyir2)      iyr[7:0] <= src_pqr20;
     if ( up_l_add16   & exec_iyir2)      iyr[7:0] <= add16[7:0];
     if ( LDsHL_NN  == ir2 & exec_iyir2)  iyr[7:0] <= nn[7:0];
     if ( LDsHL_6NN7== ir2 & exec_iyir2)  iyr[7:0] <= nn[7:0];
@@ -987,7 +990,7 @@ end
 always @(posedge clk)
 begin
     if ( upd_h_alu8 & exec_iyir2)        iyr[15:8] <= alu8_out;
-    if ( upd_h_src_pqr & exec_iyir2)      iyr[15:8] <= src_pqr;
+    if ( upd_h_src_pqr & exec_iyir2)      iyr[15:8] <= src_pqr20;
     if ( up_h_add16   & exec_iyir2)      iyr[15:8] <= add16[15:8];
     if ( LDsHL_NN  == ir2 & exec_iyir2)  iyr[15:8] <= nn[15:8];
     if ( LDsHL_6NN7== ir2 & exec_iyir2)  iyr[15:8] <= nn[15:8];
@@ -1082,8 +1085,8 @@ assign upd_fr_add16 =
 
 // update all flags from alu16
 assign upd_fr_edadd16 = 
-    ED_SBCsHL_REG  == {ir2[7:6],ir2[3:0]} | // compair with {ir2[7:6],ir2[3:0]}
-    ED_ADCsHL_REG  == {ir2[7:6],ir2[3:0]} ; // compair with {ir2[7:6],ir2[3:0]}
+    ED_SBCsHL_REG  == {ir2[9:6],ir2[3:0]} | // compair with {ir2[9:6],ir2[3:0]}
+    ED_ADCsHL_REG  == {ir2[9:6],ir2[3:0]} ; // compair with {ir2[9:6],ir2[3:0]}
 
 
 //  the shifts probably muck with all flags (some operations are 
@@ -1114,13 +1117,13 @@ assign upd_fr_cbsh =
 //INCs6HL7     = 'h34,//      INC (HL)     ; 34
 //DECs6HL7     = 'h35,//      DEC (HL)     ; 35
 
-//  ED Block Move messyness    upd_b_decbc
+//  ED Block Move messyness    upd_b_decbc  4/19/2004 not used  - probably not needed
 //  hf and nf <= 0   pnf<= BC==0
-assign eb_blk_mv = 
-    ED_LDI       == ir2 | //      LDI        ; ED A0   (DE++) <= (HL++) , BC-- 
-    ED_LDD       == ir2 | //      LDD        ; ED A8   (DE--) <= (HL--) , BC--
-    ED_LDIR      == ir2 | //      LDIR       ; ED B0   (DE++) <= (HL++) , BC-- Repeat til BC==0 
-    ED_LDDR      == ir2  ;//      LDDR       ; ED B8   (DE--) <= (HL--) , BC-- Repeat til BC==0
+//assign eb_blk_mv = 
+//    ED_LDI       == ir2 | //      LDI        ; ED A0   (DE++) <= (HL++) , BC-- 
+//    ED_LDD       == ir2 | //      LDD        ; ED A8   (DE--) <= (HL--) , BC--
+//    ED_LDIR      == ir2 | //      LDIR       ; ED B0   (DE++) <= (HL++) , BC-- Repeat til BC==0 
+//    ED_LDDR      == ir2  ;//      LDDR       ; ED B8   (DE--) <= (HL--) , BC-- Repeat til BC==0
 // only c not affected - nf<=1 ? 
 assign ed_blk_cp =
     ED_CPI       == ir2 | //      CPI        ; ED A1    A - (HL++) , BC--
@@ -1174,10 +1177,12 @@ assign upd_fr =  exec_ir2 & ( ( upd_fr_alu8 )                       |
                               (SCF == ir2 )                         |
                               (ED_RRD == ir2)                       |
                               (ED_RLD == ir2)                       |
-                              (ED_LDsA_I == ir2)                      )  ; 
+                              (ED_LDsA_I == ir2)                    | 
+                              (ir2 == EXsAF_AFp )                   |  
+                              (ir2 == EXX )                         );
 
- 
- 
+
+
 wire iff2 = 1'b0; // this is supposed to be int ff #2  which is not (yet) implmented
 always @(posedge clk)
 begin
@@ -1206,7 +1211,10 @@ begin
         if (ED_RLD == ir2)      fr <= {     sf, ~|{ar[7:4],nn[7:4]}, ar[5], 1'b0, 
                                      ar[3],  ~^{ar[7:4],nn[7:4]}, 1'b0 , cf    };
         if (ED_LDsA_I == ir2)   fr <= { ir2[7], ~|ir2, ir2[5], 1'b0, ir2[3], iff2, 1'b0, cf }; // iff2 ?
-        
+        if (ir2 == EXsAF_AFp)   fr <= fp;
+        if (ir2 == EXX  )       fr <= fp;
+    
+    
     end
     // in the case of blk_cp the update above is executed 2nd - and so these are don't cares.
     if (exec_decb )          fr <=  {decb_alu[7], ~|decb_alu, decb_alu[5], hf,

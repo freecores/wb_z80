@@ -109,16 +109,19 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: memstate2.v,v 1.7 2004-04-19 05:09:11 bporcella Exp $
+//  $Id: memstate2.v,v 1.8 2004-04-19 19:13:28 bporcella Exp $
 //
-//  $Date: 2004-04-19 05:09:11 $
-//  $Revision: 1.7 $
+//  $Date: 2004-04-19 19:13:28 $
+//  $Revision: 1.8 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.7  2004/04/19 05:09:11  bporcella
+//      fixed some lint problems  --
+//
 //      Revision 1.6  2004/04/18 18:50:09  bporcella
 //      fixed some lint problems  --
 //
@@ -141,7 +144,7 @@
 //
 //
 //-------1---------2---------3--------Module Name and Port List------7---------8---------9--------0
-module memstate2(wb_adr, wb_we, wb_cyc, wb_stb, wb_lock, wb_tga_io, wb_dat_o,
+module memstate2(wb_adr, wb_we, wb_cyc, wb_stb, wb_tga_io, wb_dat_o,
                 exec_ir2, ir1, ir2, ir1dd, ir1fd, ir2dd, ir2fd, nn, sp,
                 
                 upd_ar, upd_br, upd_cr, upd_dr, upd_er, upd_hr, upd_lr,upd_fr,
@@ -164,7 +167,7 @@ output [15:0]  wb_adr;
 output         wb_we; 
 output         wb_cyc; 
 output         wb_stb; 
-output         wb_lock;     // bit set and clear insts should be atomic - could matter sometime
+//output         wb_lock;     // bit set and clear insts should be atomic - could matter sometime
 output [1:0]   wb_tga_io;
 output [7:0]   wb_dat_o;   // from nn
 //output [15:0]  add_out;  (may not wb_adr) 4/18/2004??  why?
@@ -197,7 +200,7 @@ input [15:0]    add16;         //  ir2 execution engine output for sp updates
                      
 parameter   TAG_IO    = 2'b01,   // need to review general wb usage to undrstand how best to 
             TAG_INT   = 2'b10;   // document this.
-            //                  12na
+            //                   12na // 1 is ir1 2 is ir2 n is nn gets memory a is activate ir2
 parameter   IPIPE_NOP       = 4'b0000,   //  guess I could define single bits and add them up
             IPIPE_A2        = 4'b0001,   //  would keep from getting lint bitching -- but heck
             IPIPE_ENN       = 4'b0010,   //  I'm married -> an expert at ignoring such stuff :-)
@@ -350,7 +353,7 @@ parameter       MEM_NOP      = 5'h00,
 //-------1---------2---------3--------Wires----------------6---------7---------8---------9--------0
 
 
-//wire        use_sp;  //  old names probably from first go-around 
+//wire        use_sp;  //  old names  probably from first go-around 
 //wire        use_pc; 
 //wire        use_hl; 
 //wire        use_de; 
@@ -370,13 +373,13 @@ wire        wb_int;
 wire [15:0] hl, de, bc;
 wire [3:0]  mem_exec_dec;
 
-wire  use_a  ;
-wire  use_b  ;
-wire  use_c  ;
-wire  use_d  ;
-wire  use_e  ;
-wire  use_h  ;
-wire  use_l  ;
+//wire  use_a  ;old names for hazard dect.  remove
+//wire  use_b  ;
+//wire  use_c  ;
+//wire  use_d  ;
+//wire  use_e  ;
+//wire  use_h  ;
+//wire  use_l  ;
 // don't forget that as 1r1 is executed it is transferred to ir2.  Anything I need to know
 // about subsequent operations must be stored.
 //               6              5              4                15
@@ -406,9 +409,9 @@ reg   [14:0]       next_state;      // a wire assigned in an alowys loop.
 
 reg   [5:0]  dec_state;    // the register set each clock from next_dec_state;
 
-reg          of16_reg,  os16_reg, rmw8_reg, call_reg, ret_reg, ioi;
-reg          push_reg;
-reg          pop_reg;
+//reg          of16_reg,  os16_reg, rmw8_reg, call_reg, ret_reg, ioi;
+//reg          push_reg;
+//reg          pop_reg;
 reg          inst_haz;
 reg          exec_ir2; 
 reg          blk_rpt_flg;
@@ -424,7 +427,7 @@ reg          wb_irq_sync;
 assign wb_dat_o = nn[15:8];
 
 wire   sf, zf, f5f, hf, f3f, pvf, nf, cf;
-assign { sf, zf, f5f, hf, f3f, pvf, nf, cf} = fr;
+assign { sf, zf, f5f, hf, f3f, pvf, nf, cf} = fr;  //  no load on f5f, f3f  ok  hf nf used in inst_exec.v
 
 
 assign hl = {hr, lr};
@@ -838,7 +841,7 @@ wire os_a  =  LDs6BC7_A    == ir1 |  //      LD (BC),A    ; 02
               LDs6NN7_A    == ir1 |  //      LD (NN),A    ; 32 XX XX
               PUSHsAF      == ir1 |
               OUTs6N7_A    == ir1 |
-              ED_OUTs6C7_REG ==  {ir1[9:6],ir1[2:0] && REG8_A == ir1[5:3]} ;
+              (ED_OUTs6C7_REG ==  {ir1[9:6],ir1[2:0]}) & REG8_A == ir1[5:3] ;
 
 wire os_b = LDs6HL7_B      == ir1                                       |  // LD (HL),B    ; 70
             ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_BC == ir1[5:4] |
@@ -866,7 +869,7 @@ wire os_l = LDs6HL7_L    == ir1                                     |  //      L
             PUSHsHL      == ir1                                     |  
             ED_OUTs6C7_REG ==  {ir1[9:6],ir1[2:0]} & REG8_L == ir1[5:3] ;
 
-wire os_sp = ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_SP == ir1[5:4];
+// wire os_sp = ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_SP == ir1[5:4]; not used ?
 
 wire os_f  =  PUSHsAF     == ir1 ;                                        
 
@@ -971,8 +974,8 @@ assign  use_l = os_l  | opadr_hl;
 
 
 
-wire bc_eq0 = beq0 & ceq0;
-//  ???  not used ?  why defined ?
+//wire bc_eq0 = beq0 & ceq0;
+//  ???  not used ?  why defined ?  I simply re-wrote the test   re-name 
 //assign rpt_blk_mv = (blk_mv_reg )  & !bc_eq0     |
 //                    (blk_cmp_reg) & !bc_eq0 & (nn[7:0] != 8'h0)  |
 //                    (blk_in_reg | blk_out_reg) & !b_eq0 ;
@@ -1058,17 +1061,17 @@ wire src_int = next_mem_state == MEM_IOF_N  |
                
                                  
 
-wire   src_mux =   {16{ src_sp  }} & sp                 |
-                   {16{ src_pc  }} & pc                 |
-                   {16{ src_nn  }} & nn                 |
-                   {16{ src_hl  }} & hl                 |
-                   {16{ src_de  }} & de                 |
-                   {16{ src_bc  }} & bc                 |
-                   {16{ src_ix  }} & ixr                |
-                   {16{ src_iy  }} & iyr                |
-                   {16{ src_adr }} & wb_adr             |
-                   {16{ src_int }} & { intr, nn[15:8] } |
-                   {16{next_mem_state == MEM_IFRST}} & {10'h0, ir1[6:4], 3'h0} ;
+wire [15:0]  src_mux =   {16{ src_sp  }} & sp                 |
+                         {16{ src_pc  }} & pc                 |
+                         {16{ src_nn  }} & nn                 |
+                         {16{ src_hl  }} & hl                 |
+                         {16{ src_de  }} & de                 |
+                         {16{ src_bc  }} & bc                 |
+                         {16{ src_ix  }} & ixr                |
+                         {16{ src_iy  }} & iyr                |
+                         {16{ src_adr }} & wb_adr             |
+                         {16{ src_int }} & { intr, nn[15:8] } |
+                         {16{next_mem_state == MEM_IFRST}} & {10'h0, ir1[6:4], 3'h0} ;
                    
 wire block_mv_inc = (dec_state == DEC_ED) ? dec_blk_inc : blk_inc_flg; // flag set at DEC_ED
 
@@ -1094,12 +1097,14 @@ wire reln    =    next_mem_state ==  MEM_IFREL_N   |
                   next_mem_state ==  MEM_OFIXpD    |
                    next_mem_state ==  MEM_OSIXpD    ;
 
-wire   src2    = {16{ inc    }}  & 16'h0001           |
-                 {16{ dec    }}  & 16'hffff           |                 
-                 {16{ reln    }}  & {{8{nn[15]}},nn[15:8]}|
-                 {16{~(reln   |inc   |dec   )}} & 16'h0   ;
+wire  [15:0] src2    = {16{ inc    }}  & 16'h0001               |
+                       {16{ dec    }}  & 16'hffff               |                 
+                       {16{ reln    }}  & {{8{nn[15]}},nn[15:8]}|
+                       {16{~(reln | inc | dec)}} & 16'h0    ;// lint complains that this signal
+                                                             // has no load  -YES it is not needed -
+                                                             // more for information --  amazing complaint though
 
-wire   adr_alu     = src2 + src_mux;                 
+wire [15:0]  adr_alu     = src2 + src_mux;                 
                   
 
 wire  pre_inc_dec =    next_mem_state ==  MEM_CALL    | 
@@ -1107,7 +1112,7 @@ wire  pre_inc_dec =    next_mem_state ==  MEM_CALL    |
                        next_mem_state ==  MEM_OSSP     ;
 
 
-wire   mux21 =  pre_inc_dec ? adr_alu : src_mux; 
+wire  [15:0] mux21 =  pre_inc_dec ? adr_alu : src_mux; 
 
 assign wb_rdy_nhz = (!wb_cyc | wb_ack ) & ~hazard;   //  wishbone ready with no hazard
 wire   wb_rdy     = !wb_cyc | wb_ack;
@@ -1133,7 +1138,7 @@ assign we_next = next_mem_state == MEM_OS1        |
 //              6              5              4                15
 assign {next_dec_state, next_mem_state, next_pipe_state} = next_state;
 
-always @(ir1 or wb_int or inst_haz or wb_int or dec_state or mem_exec_dec or cb_mem or ed_nn or
+always @(ir1 or wb_int or inst_haz  or dec_state or mem_exec_dec or cb_mem or ed_nn or
          ed_blk_cp  or ed_blk_in or ed_blk_out or ed_retn or ed_blk_mv or ed_dbl_rd or blk_done or 
          fr or jmpr_true or callnn_true or jmpnn_true )
          
@@ -1320,12 +1325,12 @@ begin
         //   if there's anyone who knows is there anyone who cares.   
         //   guess I'll do it fast  --   just a 16 bit subtractor.  heck silicon is 
         //   cheap.  
-        DEC_INT1:       next_state <= {DEC_INT2, MEM_OSSP_PCM2, IPIPE_NOP};   //must derement PC
-        DEC_INT2:       next_state <= {DEC_INT3, MEM_OSSP_P,   IPIPE_NOP};    //must dec sp and PC  2 ops?
-        DEC_INT3:       next_state <= {DEC_INT4, MEM_INTA,     IPIPE_NOP};
-        DEC_INT4:       next_state <= {DEC_INT5, MEM_NOP,      IPIPE_ENN};
-        DEC_INT5:       next_state <= {DEC_IF2,  MEM_IFINT,    IPIPE_NOP};
-        default:        next_state <= {DEC_IDLE, MEM_NOP,      IPIPE_NOP};
+        DEC_INT1:       next_state = {DEC_INT2, MEM_OSSP_PCM2, IPIPE_NOP};   //must derement PC
+        DEC_INT2:       next_state = {DEC_INT3, MEM_OSSP_P,   IPIPE_NOP};    //must dec sp and PC  2 ops?
+        DEC_INT3:       next_state = {DEC_INT4, MEM_INTA,     IPIPE_NOP};
+        DEC_INT4:       next_state = {DEC_INT5, MEM_NOP,      IPIPE_ENN};
+        DEC_INT5:       next_state = {DEC_IF2,  MEM_IFINT,    IPIPE_NOP};
+        default:        next_state = {DEC_IDLE, MEM_NOP,      IPIPE_NOP};
     endcase
 end
 
@@ -1500,8 +1505,8 @@ always @(posedge clk)
                  if (os_l)     nn       <= {lr, hr };  // use for PUSHsHL
                  if (os_f)     nn       <= {fr, ar };  // use for PUSHsAF
             end
-        
-        else   nn  <= { wb_dat_i, nn[15:8] };    
+        // 4/19/2004 previously no if here - if not needed we don't need next_pipe_state[1] eithor
+        else if (next_pipe_state[1])  nn  <= { wb_dat_i, nn[15:8] };    
     end
           
 

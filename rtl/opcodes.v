@@ -64,16 +64,19 @@
 //
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: opcodes.v,v 1.1 2004-04-17 18:26:06 bporcella Exp $
+//  $Id: opcodes.v,v 1.2 2004-05-18 22:31:20 bporcella Exp $
 //
-//  $Date: 2004-04-17 18:26:06 $
-//  $Revision: 1.1 $
+//  $Date: 2004-05-18 22:31:20 $
+//  $Revision: 1.2 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.1  2004/04/17 18:26:06  bporcella
+//      put this here to try an end-run around lint mikefile problem
+//
 //      Revision 1.1.1.1  2004/04/13 23:47:56  bporcella
 //      import first files
 //
@@ -426,9 +429,9 @@ parameter  NOP          = 10'h00,//      NOP         ; 00
         ED_RETN        =    7'b1001___101, // compair with {ir[9:6],ir[2:0]} and !reti
         
         DBL_REG_BC   = 2'b00,  // compair with ir[5:4]
-        DBL_REG_DE   = 2'b00,  // compair with ir[5:4]
-        DBL_REG_HL   = 2'b00,  // compair with ir[5:4]
-        DBL_REG_SP   = 2'b00,  // compair with ir[5:4]
+        DBL_REG_DE   = 2'b01,  // compair with ir[5:4]
+        DBL_REG_HL   = 2'b10,  // compair with ir[5:4]
+        DBL_REG_SP   = 2'b11,  // compair with ir[5:4]
 
         REG8_B = 3'b000,
         REG8_C = 3'b001,

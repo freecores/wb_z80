@@ -1,4 +1,14 @@
-
+; bjp   modified to assemble on as80.
+; minor mods to account for changes in interrupt structure  and I/O
+; all such are flagged with my initials..... 
+;
+; The origional code used operators <   and  >  on symbols to extract the 
+; lower and higher bytes respectively.   It appears that as80 has no equivaltent.
+; I have hand coded such ---- hopefully correctly.   
+; This is only a significant issue with such constructs as <stack_end.   
+; My solution forces the stack to remain in its present location.   
+;
+; WARNING   If you must move the stack  --   check comments and fix code for my kludges
 ;
 ;z80 simulator test routine
 ;total error count is left in a at end of test routine
@@ -51,7 +61,7 @@ fail:		db	'failed'
 pass:		db	'passed'
 message_addr:	equ	#be58
 in_port:	equ	#ff
-out_port:	equ	#20
+out_port:	equ	#10
 ;
 data_55:	equ	#55
 data_7f:	equ	#7f
@@ -66,7 +76,7 @@ data_8000:	equ	#8000
 data_aa55:	equ	#aa55
 data_ffff:	equ	#ffff
 ;
-;inc_error_cnt	macro	     ;bjp   change for initial test
+;inc_error_cnt	macro	     ;bjp   change for initial test to halt on error
 ;		ld	hl,error_cnt
 ;		inc	(hl)
 ;		endm
@@ -653,44 +663,47 @@ ld_116:		ld	a,0
 		ld	i,a
 		ld	a,data_55
 		ld	a,i
-		jr	z,ld_117
+		jr	z,ld_125
 		inc_error_cnt
-ld_117:		ld	a,data_55
-		ld	r,a
-		ld	a,0
-		ld	a,r
-		jp	p,ld_118
-		inc_error_cnt
-ld_118:		jr	nz,ld_119
-		inc_error_cnt
-ld_119:		ld	a,data_ff
-		ld	r,a
-		ld	a,0
-		ld	a,r
-		jp	m,ld_120
-		inc_error_cnt
-ld_120:		ld	a,4			;totally sequence dependent
-		ld	r,a
-		ld	a,data_55
-		ld	a,r
-		jr	z,ld_121
-		inc_error_cnt
-ld_121:		ei				;set iff2
-		ld	a,i
-		jp	pe,ld_122		;iff2 was set
-		inc_error_cnt
-ld_122:		di				;clear iff2
-		ld	a,i
-		jp	po,ld_123		;iff2 was cleared
-		inc_error_cnt
-ld_123:		ei				;set iff2
-		ld	a,r
-		jp	pe,ld_124		;iff2 was set
-		inc_error_cnt
-ld_124:		di				;clear iff2
-		ld	a,r
-		jp	po,ld_125		;iff2 was cleared
-		inc_error_cnt
+;   refresh register not implemented    
+;   test for ie ?  
+;ld_117:		ld	a,data_55
+;		ld	r,a
+;		ld	a,0
+;		ld	a,r
+;		jp	p,ld_118
+;		inc_error_cnt
+;ld_118:		jr	nz,ld_119
+;		inc_error_cnt
+;ld_119:		ld	a,data_ff
+;		ld	r,a
+;		ld	a,0
+;		ld	a,r
+;		jp	m,ld_120
+;		inc_error_cnt
+;ld_120:		ld	a,4			;totally sequence dependent
+;		ld	r,a
+;		ld	a,data_55
+;		ld	a,r
+;		jr	z,ld_121
+;		inc_error_cnt
+;ld_121:		ei				;set iff2
+;		ld	a,i
+;		jp	pe,ld_122		;iff2 was set
+;		inc_error_cnt
+;ld_122:		di				;clear iff2
+;		ld	a,i
+;		jp	po,ld_123		;iff2 was cleared
+;		inc_error_cnt
+;ld_123:		ei				;set iff2
+;		ld	a,r
+;		jp	pe,ld_124		;iff2 was set
+;		inc_error_cnt
+;ld_124:		di				;clear iff2
+;		ld	a,r
+;		jp	po,ld_125		;iff2 was cleared
+;		inc_error_cnt
+;
 ld_125:		ld	bc,data_1234
 		ld	a, #12			;bjp  guess >data_1234
 		cp	b
@@ -1430,10 +1443,10 @@ add_72:		add	a,1
 add_73:		cp	data_80+1
 		jr	z,adc_0
 		inc_error_cnt
-adc_0:		ld	a,0
+adc_0:		ld	a,0                 ;clear cry 
 		add	a,0
 		ld	b,data_7f
-		adc	a,b
+		adc	a,b                  ;a=7f cry=0
 		jp	p,adc_1
 		inc_error_cnt
 adc_1:		jp	po,adc_2
@@ -1443,17 +1456,17 @@ adc_2:		jr	nc,adc_3
 adc_3:		jr	nz,adc_4
 		inc_error_cnt
 adc_4:		ld	b,1
-		adc	a,b
-		jp	pe,adc_5
+		adc	a,b                     ;a=80 cry=0  
+		jp	pe,adc_5                ;jp  ofl
 		inc_error_cnt
 adc_5:		jp	m,adc_6
 		inc_error_cnt
 adc_6:		cp	data_80
-		jr	z,adc_7
+		jr	z,adc_7                 ;z=0  ofl=0 cry=0 (borrow)
 		inc_error_cnt
 adc_7:		ld	a,data_ff
 		ld	b,1
-		adc	a,b
+		adc	a,b                      ;ff+1+0
 		jr	c,adc_8
 		inc_error_cnt
 adc_8:		jr	z,adc_9
@@ -3466,2659 +3479,2658 @@ add_109:	ld	sp,stack_end
 		add	ix,sp
 		jr	nc,add_110
 		inc_error_cnt
-add_110         jp      inc_pass		
-;add_110:	push	ix
-;		pop	hl
-;		ld	a,h
-;		cp	a,(stack_end+1)		; >stack_end
-;		jr	z,add_111
-;		inc_error_cnt
-;add_111:	ld	a,l
-;		cp	a,(stack_end)		; <stack_end
-;		jr	z,add_112
-;		inc_error_cnt
-;add_112:	ld	ix,data_7fff
-;		ld	bc,data_aa55
-;		add	ix,bc
-;		jr	c,add_113
-;		inc_error_cnt
-;add_113:	add	ix,bc
-;		jr	nc,add_114
-;		inc_error_cnt
-;add_114:	push	ix
-;		pop	hl
-;		ld	a,h
-;		cp	a,#d4
-;		jr	z,add_115
-;		inc_error_cnt
-;add_115:	ld	a,l
-;		cp	a,#a9
-;		jr	z,add_116
-;		inc_error_cnt
-;add_116:	ld	ix,data_1234
-;		ld	de,data_1234
-;		add	ix,de
-;		push	ix
-;		pop	hl
-;		ld	a,h
-;		cp	a,#24		;>(data_1234+data_1234)
-;		jr	z,add_117
-;		inc_error_cnt
-;add_117:	ld	a,l
-;		cp	a,#68		;<(data_1234+data_1234)
-;		jr	z,add_118
-;		inc_error_cnt
-;add_118:	ld	ix,data_1234
-;		add	ix,ix
-;		push	ix
-;		pop	bc
-;		ld	a,b
-;		cp	a,#24		;>(data_1234+data_1234)
-;		jr	z,add_119
-;		inc_error_cnt
-;add_119:	ld	a,c
-;		cp	a,#68		;<(data_1234+data_1234)
-;		jr	z,add_120
-;		inc_error_cnt
-;add_120:	ld	sp,stack_end
-;		ld	iy,0
-;		add	iy,sp
-;		jr	nc,add_121
-;		inc_error_cnt
-;add_121:	push	iy
-;		pop	hl
-;		ld	a,h
-;		cp	a,stack_end+1		;stack_end
-;		jr	z,add_122
-;		inc_error_cnt
-;add_122:	ld	a,l
-;		cp	a,(stack_end)		;<stack_end
-;		jr	z,add_123
-;		inc_error_cnt
-;add_123:	ld	iy,data_7fff
-;		ld	bc,data_aa55
-;		add	iy,bc
-;		jr	c,add_124
-;		inc_error_cnt
-;add_124:	add	iy,bc
-;		jr	nc,add_125
-;		inc_error_cnt
-;add_125:	push	iy
-;		pop	hl
-;		ld	a,h
-;		cp	a,#d4
-;		jr	z,add_126
-;		inc_error_cnt
-;add_126:	ld	a,l
-;		cp	a,#a9
-;		jr	z,add_127
-;		inc_error_cnt
-;add_127:	ld	iy,data_1234
-;		ld	de,data_1234
-;		add	iy,de
-;		push	iy
-;		pop	hl
-;		ld	a,h
-;		cp	a,#24		;>(data_1234+data_1234)
-;		jr	z,add_128
-;		inc_error_cnt
-;add_128:	ld	a,l
-;		cp	a,#68		;<(data_1234+data_1234)
-;		jr	z,add_129
-;		inc_error_cnt
-;add_129:	ld	iy,data_1234
-;		add	iy,iy
-;		push	iy
-;		pop	bc
-;		ld	a,b
-;		cp	a,#24		;>(data_1234+data_1234)
-;		jr	z,add_130
-;		inc_error_cnt
-;add_130:	ld	a,c
-;		cp	a,#68		;<(data_1234+data_1234)
-;		jr	z,inc_54
-;		inc_error_cnt
-;inc_54:		ld	bc,data_1234
-;		inc	bc
-;		ld	a,b
-;		cp	a,#12      ;bjp was >data_1234
-;		jr	z,inc_55
-;		inc_error_cnt
-;inc_55:		ld	a,c
-;		cp	a,#34+1      ;bjp was >data_1234+1
-;		jr	z,inc_56
-;		inc_error_cnt
-;inc_56:		ld	de,data_55aa
-;		inc	de
-;		ld	a,d
-;		cp	a,#55		;>data_55aa
-;		jr	z,inc_57
-;		inc_error_cnt
-;inc_57:		ld	a,e
-;		cp	a,#ab		;<data_55aa+1
-;		jr	z,inc_58
-;		inc_error_cnt
-;inc_58:		ld	hl,data_7fff
-;		inc	hl
-;		ld	a,h
-;		cp	a,#80		;>data_7fff+1
-;		jr	z,inc_59
-;		inc_error_cnt
-;inc_59:		ld	a,l
-;		cp	a,#00		;<data_7fff+1
-;		jr	z,inc_60
-;		inc_error_cnt
-;inc_60:		ld	hl,0
-;		inc	sp
-;		add	hl,sp
-;		ld	sp,stack_end
-;		ld	a,h
-;		cp	a,(stack_end+2)		;>stack_end+1
-;		jr	z,inc_61
-;		inc_error_cnt
-;inc_61:		ld	a,l
-;		cp	a,(stack_end+1)		;<stack_end+1
-;		jr	z,inc_62
-;		inc_error_cnt
-;inc_62:		ld	ix,data_8000
-;		inc	ix
-;		push	ix
-;		pop	de
-;		ld	a,d
-;		cp	a,#80		;>data_8000
-;		jr	z,inc_63
-;		inc_error_cnt
-;inc_63:		ld	a,e
-;		cp	a,#01		;<data_8000+1
-;		jr	z,inc_64
-;		inc_error_cnt
-;inc_64:		ld	iy,data_7fff
-;		inc 	iy
-;		push	iy
-;		pop	bc
-;		ld	a,b
-;		cp	a,#80		;>data_7fff+1
-;		jr	z,inc_65
-;		inc_error_cnt
-;inc_65:		ld	a,c
-;		cp	a,#00		;<data_7fff+1
-;		jr	z,dec_46
-;		inc_error_cnt
-;dec_46:		ld	bc,data_1234
-;		dec	bc
-;		ld	a,b
-;		cp	a,#12      ;bjp was >data_1234
-;		jr	z,dec_47
-;		inc_error_cnt
-;dec_47:		ld	a,c
-;		cp	a,#34-1      ;bjp was >data_1234-1
-;		jr	z,dec_48
-;		inc_error_cnt
-;dec_48:		ld	de,data_8000
-;		dec	de
-;		ld	a,d
-;		cp	a,#7f		;>data_7fff
-;		jr	z,dec_49
-;		inc_error_cnt
-;dec_49:		ld	a,e
-;		cp	a,#ff		;<data_7fff
-;		jr	z,dec_50
-;		inc_error_cnt
-;dec_50:		ld	hl,data_aa55
-;		dec	hl
-;		ld	a,h
-;		cp	a,#aa		;>data_aa55
-;		jr	z,dec_51
-;		inc_error_cnt
-;dec_51:		ld	a,l
-;		cp	a,#54		;<data_aa55-1
-;		jr	z,dec_52
-;		inc_error_cnt
-;dec_52:		ld	hl,0
-;		dec	sp
-;		add	hl,sp
-;		ld	a,h
-;		cp	a,(stack_end)		;>stack_end-1
-;		jr	z,dec_53
-;		inc_error_cnt
-;dec_53:		ld	a,l
-;		cp	a,(stack_end-1)		;<stack_end-1
-;		jr	z,dec_54
-;		inc_error_cnt
-;dec_54:		ld	sp,stack_end
-;		ld	ix,data_ffff
-;		dec	ix
-;		push	ix
-;		pop	bc
-;		ld	a,b
-;		cp	a,#ff		;>data_ffff
-;		jr	z,dec_55
-;		inc_error_cnt
-;dec_55:		ld	a,c
-;		cp	a,#00		;<data_ffff-1
-;		jr	z,dec_56
-;		inc_error_cnt
-;dec_56:		ld	iy,data_aa55
-;		dec	iy
-;		push	iy
-;		pop	de
-;		ld	a,d
-;		cp	a,#aa		;>data_aa55
-;		jr	z,dec_57
-;		inc_error_cnt
-;dec_57:		ld	a,e
-;		cp	a,#54		;<data_aa55-1
-;		jr	z,rlca_0
-;		inc_error_cnt
-;rlca_0:		ld	a,data_80
-;		rlca
-;		jr	c,rlca_1
-;		inc_error_cnt
-;rlca_1:		rlca
-;		jr	nc,rlca_2
-;		inc_error_cnt
-;rlca_2:		cp	a,2
-;		jr	z,rlca_3
-;		inc_error_cnt
-;rlca_3:		ld	a,data_55
-;		rlca
-;		cp	a,data_aa
-;		jr	z,rla_0
-;		inc_error_cnt
-;rla_0:		scf
-;		ccf
-;		ld	a,data_80
-;		rla
-;		jr	c,rla_1
-;		inc_error_cnt
-;rla_1:		rla
-;		jr	nc,rla_2
-;		inc_error_cnt
-;rla_2:		cp	a,1
-;		jr	z,rla_3
-;		inc_error_cnt
-;rla_3:		ld	a,data_7f
-;		rla
-;		cp	a,data_ff-1
-;		jr	z,rrca_0
-;		inc_error_cnt
-;rrca_0:		scf
-;		ccf
-;		ld	a,1
-;		rrca
-;		jr	c,rrca_1
-;		inc_error_cnt
-;rrca_1:		rrca
-;		jr	nc,rrca_2
-;		inc_error_cnt
-;rrca_2:		cp	a,data_7f-#3f
-;		jr	z,rrca_3
-;		inc_error_cnt
-;rrca_3:		ld	a,data_aa
-;		rrca
-;		cp	a,data_55
-;		jr	z,rra_0
-;		inc_error_cnt
-;rra_0:		scf
-;		ccf
-;		ld	a,1
-;		rra
-;		jr	c,rra_1
-;		inc_error_cnt
-;rra_1:		rra
-;		jr	nc,rra_2
-;		inc_error_cnt
-;rra_2:		cp	a,data_80
-;		jr	z,rra_3
-;		inc_error_cnt
-;rra_3:		ld	a,data_aa
-;		rra
-;		cp	a,data_55
-;		jr	z,rlc_0
-;		inc_error_cnt
-;rlc_0:		ld	a,data_80
-;		rlc	a
-;		jr	c,rlc_1
-;		inc_error_cnt
-;rlc_1:		jp	p,rlc_2
-;		inc_error_cnt
-;rlc_2:		jr	nz,rlc_3
-;		inc_error_cnt
-;rlc_3:		jp	po,rlc_4
-;		inc_error_cnt
-;rlc_4:		rlc	a
-;		jr	nc,rlc_5
-;		inc_error_cnt
-;rlc_5:		rlc	a
-;		rlc	a
-;		rlc	a
-;		rlc	a
-;		rlc	a
-;		rlc	a
-;		jp	m,rlc_6
-;		inc_error_cnt
-;rlc_6:		ld	a,data_55
-;		rlc	a
-;		jp	m,rlc_7
-;		inc_error_cnt
-;rlc_7:		jp	pe,rlc_8
-;		inc_error_cnt
-;rlc_8:		cp	a,data_aa
-;		jr	z,rlc_9
-;		inc_error_cnt
-;rlc_9:		ld	a,0
-;		rlc	a
-;		jr	z,rlc_10
-;		inc_error_cnt
-;rlc_10:		ld	b,data_7f
-;		rlc	b
-;		ld	a,b
-;		cp	a,data_ff-1
-;		jr	z,rlc_11
-;		inc_error_cnt
-;rlc_11:		ld	c,data_aa
-;		rlc	c
-;		jr	c,rlc_12
-;		inc_error_cnt
-;rlc_12:		ld	a,c
-;		cp	a,data_55
-;		jr	z,rlc_13
-;		inc_error_cnt
-;rlc_13:		ld	d,data_80
-;		rlc	d
-;		jr	c,rlc_14
-;		inc_error_cnt
-;rlc_14:		ld	a,d
-;		cp	a,1
-;		jr	z,rlc_15
-;		inc_error_cnt
-;rlc_15:		ld	e,data_ff
-;		rlc	e
-;		jr	c,rlc_16
-;		inc_error_cnt
-;rlc_16:		ld	a,e
-;		cp	a,data_ff
-;		jr	z,rlc_17
-;		inc_error_cnt
-;rlc_17:		ld	h,data_55
-;		rlc	h
-;		jp	m,rlc_18
-;		inc_error_cnt
-;rlc_18:		ld	a,h
-;		cp	a,data_aa
-;		jr	z,rlc_19
-;		inc_error_cnt
-;rlc_19:		ld	l,data_80
-;		rlc	l
-;		jp	p,rlc_20
-;		inc_error_cnt
-;rlc_20:		ld	a,l
-;		cp	a,1
-;		jr	z,rlc_21
-;		inc_error_cnt
-;rlc_21:		ld	hl,t_var1
-;		ld	a,data_55
-;		ld	(hl),a
-;		rlc	(hl)
-;		jp	m,rlc_22
-;		inc_error_cnt
-;rlc_22:		jp	pe,rlc_23
-;		inc_error_cnt
-;rlc_23:		jr	nc,rlc_24
-;		inc_error_cnt
-;rlc_24:		jr	nz,rlc_25
-;		inc_error_cnt
-;rlc_25:		rlc	(hl)
-;		jp	p,rlc_26
-;		inc_error_cnt
-;rlc_26:		jr	c,rlc_27
-;		inc_error_cnt
-;rlc_27:		ld	a,(hl)
-;		cp	a,data_55
-;		jr	z,rlc_28
-;		inc_error_cnt
-;rlc_28:		ld	a,data_7f
-;		ld	(hl),a
-;		rlc	(hl)
-;		jp	po,rlc_29
-;		inc_error_cnt
-;rlc_29:		ld	a,(hl)
-;		cp	a,data_ff-1
-;		jr	z,rlc_30
-;		inc_error_cnt
-;rlc_30:		ld	a,0
-;		ld	(hl),a
-;		rlc	(hl)
-;		jr	z,rlc_31
-;		inc_error_cnt
-;rlc_31:		ld	ix,t_var3
-;		ld	a,data_55
-;		ld	(ix-2),a
-;		rlc	(ix-2)
-;		jp	m,rlc_32
-;		inc_error_cnt
-;rlc_32:		jp	pe,rlc_33
-;		inc_error_cnt
-;rlc_33:		jr	nz,rlc_34
-;		inc_error_cnt
-;rlc_34:		jr	nc,rlc_35
-;		inc_error_cnt
-;rlc_35:		rlc	(ix-2)
-;		jp	p,rlc_36
-;		inc_error_cnt
-;rlc_36:		jr	c,rlc_37
-;		inc_error_cnt
-;rlc_37:		ld	a,(ix-2)
-;		cp	a,data_55
-;		jr	z,rlc_38
-;		inc_error_cnt
-;rlc_38:		ld	a,data_7f
-;		ld	(ix+2),a
-;		rlc	(ix+2)
-;		jp	po,rlc_39
-;		inc_error_cnt
-;rlc_39:		ld	a,(ix+2)
-;		cp	a,data_ff-1
-;		jr	z,rlc_40
-;		inc_error_cnt
-;rlc_40:		ld	a,0
-;		ld	(ix-1),a
-;		rlc	(ix-1)
-;		jr	z,rlc_41
-;		inc_error_cnt
-;rlc_41:		ld	iy,t_var3
-;		ld	a,data_55
-;		ld	(iy+2),a
-;		rlc	(iy+2)
-;		jp	m,rlc_42
-;		inc_error_cnt
-;rlc_42:		jp	pe,rlc_43
-;		inc_error_cnt
-;rlc_43:		jr	nc,rlc_44
-;		inc_error_cnt
-;rlc_44:		jr	nz,rlc_45
-;		inc_error_cnt
-;rlc_45:		rlc	(iy+2)
-;		jp	p,rlc_46
-;		inc_error_cnt
-;rlc_46:		jr	c,rlc_47
-;		inc_error_cnt
-;rlc_47:		ld	a,(iy+2)
-;		cp	a,data_55
-;		jr	z,rlc_48
-;		inc_error_cnt
-;rlc_48:		ld	a,data_7f
-;		ld	(iy-2),a
-;		rlc	(iy-2)
-;		jp	po,rlc_49
-;		inc_error_cnt
-;rlc_49:		ld	a,(iy-2)
-;		cp	a,data_ff-1
-;		jr	z,rlc_50
-;		inc_error_cnt
-;rlc_50:		ld	a,0
-;		ld	(iy+1),a
-;		rlc	(iy+1)
-;		jr	z,rl_0
-;		inc_error_cnt
-;rl_0:		scf
-;		ccf
-;		ld	a,data_55
-;		rl	a
-;		jp	m,rl_1
-;		inc_error_cnt
-;rl_1:		jp	pe,rl_2
-;		inc_error_cnt
-;rl_2:		jr	nc,rl_3
-;		inc_error_cnt
-;rl_3:		jr	nz,rl_4
-;		inc_error_cnt
-;rl_4:		rl	a
-;		jp	p,rl_5
-;		inc_error_cnt
-;rl_5:		jp	po,rl_6
-;		inc_error_cnt
-;rl_6:		jr	c,rl_7
-;		inc_error_cnt
-;rl_7:		rl	a
-;		cp	a,data_aa-1
-;		jr	z,rl_8
-;		inc_error_cnt
-;rl_8:		ld	a,0
-;		rl	a
-;		jr	z,rl_9
-;		inc_error_cnt
-;rl_9:		ld	b,data_aa
-;		ld	c,data_7f
-;		rl	b
-;		jr	c,rl_10
-;		inc_error_cnt
-;rl_10:		rl	c
-;		jr	nc,rl_11
-;		inc_error_cnt
-;rl_11:		ld	a,b
-;		cp	a,data_55-1
-;		jr	z,rl_12
-;		inc_error_cnt
-;rl_12:		ld	a,c
-;		cp	a,data_ff
-;		jr	z,rl_13
-;		inc_error_cnt
-;rl_13:		ld	d,data_ff
-;		ld	e,data_80
-;		rl	e
-;		jr	c,rl_14
-;		inc_error_cnt
-;rl_14:		rl	d
-;		jr	c,rl_15
-;		inc_error_cnt
-;rl_15:		ld	a,d
-;		cp	a,data_ff
-;		jr	z,rl_16
-;		inc_error_cnt
-;rl_16:		ld	a,e
-;		cp	a,0
-;		jr	z,rl_17
-;		inc_error_cnt
-;rl_17:		ld	h,data_7f
-;		ld	l,data_55
-;		rl	h
-;		jp	m,rl_18
-;		inc_error_cnt
-;rl_18:		rl	l
-;		jp	m,rl_19
-;		inc_error_cnt
-;rl_19:		ld	a,h
-;		cp	a,data_ff-1
-;		jr	z,rl_20
-;		inc_error_cnt
-;rl_20:		ld	a,l
-;		cp	a,data_aa
-;		jr	z,rl_21
-;		inc_error_cnt
-;rl_21:		ld	hl,t_var5
-;		ld	a,data_55
-;		ld	(hl),a
-;		rl	(hl)
-;		jp	m,rl_22
-;		inc_error_cnt
-;rl_22:		jp	pe,rl_23
-;		inc_error_cnt
-;rl_23:		jr	nc,rl_24
-;		inc_error_cnt
-;rl_24:		jr	nz,rl_25
-;		inc_error_cnt
-;rl_25:		rl	(hl)
-;		jp	p,rl_26
-;		inc_error_cnt
-;rl_26:		jp	po,rl_27
-;		inc_error_cnt
-;rl_27:		jr	c,rl_28
-;		inc_error_cnt
-;rl_28:		ld	a,(hl)
-;		cp	a,data_55-1
-;		jr	z,rl_29
-;		inc_error_cnt
-;rl_29:		ld	a,0
-;		ld	(hl),a
-;		rl	(hl)
-;		jr	z,rl_30
-;		inc_error_cnt
-;rl_30:		ld	ix,t_var3
-;		ld	a,data_55
-;		ld	(ix-2),a
-;		rl	(ix-2)
-;		jp	m,rl_31
-;		inc_error_cnt
-;rl_31:		jp	pe,rl_32
-;		inc_error_cnt
-;rl_32:		jr	nc,rl_33
-;		inc_error_cnt
-;rl_33:		jr	nz,rl_34
-;		inc_error_cnt
-;rl_34:		rl	(ix-2)
-;		jp	p,rl_35
-;		inc_error_cnt
-;rl_35:		jp	po,rl_36
-;		inc_error_cnt
-;rl_36:		jr	c,rl_37
-;		inc_error_cnt
-;rl_37:		ld	a,(ix-2)
-;		cp	a,data_55-1
-;		jr	z,rl_38
-;		inc_error_cnt
-;rl_38:		ld	a,0
-;		ld	(ix+2),a
-;		rl	(ix+2)
-;		jr	z,rl_39
-;rl_39:		ld	iy,t_var3
-;		ld	a,data_55
-;		ld	(iy-1),a
-;		rl	(iy-1)
-;		jp	m,rl_40
-;		inc_error_cnt
-;rl_40:		jp	pe,rl_41
-;		inc_error_cnt
-;rl_41:		jr	nc,rl_42
-;		inc_error_cnt
-;rl_42:		jr	nz,rl_43
-;		inc_error_cnt
-;rl_43:		rl	(iy-1)
-;		jp	p,rl_44
-;		inc_error_cnt
-;rl_44:		jp	po,rl_45
-;		inc_error_cnt
-;rl_45:		jr	c,rl_46
-;		inc_error_cnt
-;rl_46:		ld	a,(iy-1)
-;		cp	a,data_55-1
-;		jr	z,rl_47
-;		inc_error_cnt
-;rl_47:		ld	a,0
-;		ld	(iy+1),a
-;		rl	(iy+1)
-;		jr	z,rrc_0
-;		inc_error_cnt
-;rrc_0:		ld	a,data_aa
-;		rrc	a
-;		jp	p,rrc_1
-;		inc_error_cnt
-;rrc_1:		jp	pe,rrc_2
-;		inc_error_cnt
-;rrc_2:		jr	nz,rrc_3
-;		inc_error_cnt
-;rrc_3:		jr	nc,rrc_4
-;		inc_error_cnt
-;rrc_4:		rrc	a
-;		jp	m,rrc_5
-;		inc_error_cnt
-;rrc_5:		jr	c,rrc_6
-;		inc_error_cnt
-;rrc_6:		cp	a,data_aa
-;		jr	z,rrc_7
-;		inc_error_cnt
-;rrc_7:		ld	a,1
-;		rrc	a
-;		jr	c,rrc_8
-;		inc_error_cnt
-;rrc_8:		cp	a,data_80
-;		jr	z,rrc_9
-;		inc_error_cnt
-;rrc_9:		ld	a,data_7f
-;		rrc	a
-;		jp	po,rrc_10
-;		inc_error_cnt
-;rrc_10:		cp	a,#bf
-;		jr	z,rrc_11
-;		inc_error_cnt
-;rrc_11:		ld	b,data_80
-;		ld	c,data_55
-;		rrc	b
-;		jr	nc,rrc_12
-;		inc_error_cnt
-;rrc_12:		rrc	c
-;		jr	c,rrc_13
-;		inc_error_cnt
-;rrc_13:		ld	a,b
-;		cp	a,#40
-;		jr	z,rrc_14
-;		inc_error_cnt
-;rrc_14:		ld	a,c
-;		cp	a,data_aa
-;		jr	z,rrc_15
-;		inc_error_cnt
-;rrc_15:		ld	d,data_aa
-;		ld	e,1
-;		rrc	d
-;		jp	p,rrc_16
-;		inc_error_cnt
-;rrc_16:		rrc	e
-;		jp	m,rrc_17
-;		inc_error_cnt
-;rrc_17:		ld	a,d
-;		cp	a,data_55
-;		jr	z,rrc_18
-;		inc_error_cnt
-;rrc_18:		ld	a,e
-;		cp	a,data_80
-;		jr	z,rrc_19
-;		inc_error_cnt
-;rrc_19:		ld	h,data_55
-;		ld	l,data_ff
-;		rrc	h
-;		jr	c,rrc_20
-;		inc_error_cnt
-;rrc_20:		rrc	l
-;		jr	c,rrc_21
-;		inc_error_cnt
-;rrc_21:		ld	a,h
-;		cp	a,data_aa
-;		jr	z,rrc_22
-;		inc_error_cnt
-;rrc_22:		ld	a,l
-;		cp	a,data_ff
-;		jr	z,rrc_23
-;		inc_error_cnt
-;rrc_23:		ld	hl,t_var4
-;		ld	(hl),data_aa
-;		rrc	 (hl)
-;		jp	p,rrc_24
-;		inc_error_cnt
-;rrc_24:		jp	pe,rrc_25
-;		inc_error_cnt
-;rrc_25:		jr	nz,rrc_26
-;		inc_error_cnt
-;rrc_26:		jr	nc,rrc_27
-;		inc_error_cnt
-;rrc_27:		rrc	(hl)
-;		jp	m,rrc_28
-;		inc_error_cnt
-;rrc_28:		jr	c,rrc_29
-;		inc_error_cnt
-;rrc_29:		ld	a,(hl)
-;		cp	a,data_aa
-;		jr	z,rrc_30
-;		inc_error_cnt
-;rrc_30:		ld	(hl),data_7f
-;		rrc	(hl)
-;		jp	po,rrc_31
-;		inc_error_cnt
-;rrc_31:		ld	a,(hl)
-;		cp	a,#bf
-;		jr	z,rrc_32
-;		inc_error_cnt
-;rrc_32:		ld	(hl),0
-;		rrc	(hl)
-;		jr	z,rrc_33
-;		inc_error_cnt
-;rrc_33:		ld	ix,t_var3
-;		ld	a,data_aa
-;		ld	(ix+2),a
-;		rrc	(ix+2)
-;		jp	p,rrc_34
-;		inc_error_cnt
-;rrc_34:		jp	pe,rrc_35
-;		inc_error_cnt
-;rrc_35:		jr	nc,rrc_36
-;		inc_error_cnt
-;rrc_36:		jr	nz,rrc_37
-;		inc_error_cnt
-;rrc_37:		rrc	(ix+2)
-;		jp	m,rrc_38
-;		inc_error_cnt
-;rrc_38:		jr	c,rrc_39
-;		inc_error_cnt
-;rrc_39:		ld	a,(ix+2)
-;		cp	a,data_aa
-;		jr	z,rrc_40
-;		inc_error_cnt
-;rrc_40:		ld	a,1
-;		ld	(ix-2),a
-;		rrc	(ix-2)
-;		jp	po,rrc_41
-;		inc_error_cnt
-;rrc_41:		ld	a,(ix-2)
-;		cp	a,data_80
-;		jr	z,rrc_42
-;		inc_error_cnt
-;rrc_42:		ld	a,0
-;		ld	(ix+1),a
-;		rrc	(ix+1)
-;		jr	z,rrc_43
-;		inc_error_cnt
-;rrc_43:		ld	iy,t_var3
-;		ld	a,data_aa
-;		ld	(iy+2),a
-;		rrc	(iy+2)
-;		jp	p,rrc_44
-;		inc_error_cnt
-;rrc_44:		jp	pe,rrc_45
-;		inc_error_cnt
-;rrc_45:		jr	nc,rrc_46
-;		inc_error_cnt
-;rrc_46:		jr	nz,rrc_47
-;		inc_error_cnt
-;rrc_47:		rrc	(iy+2)
-;		jp	m,rrc_48
-;		inc_error_cnt
-;rrc_48:		jr	c,rrc_49
-;		inc_error_cnt
-;rrc_49:		ld	a,(iy+2)
-;		cp	a,data_aa
-;		jr	z,rrc_50
-;		inc_error_cnt
-;rrc_50:		ld	a,1
-;		ld	(iy-2),a
-;		rrc	(iy-2)
-;		jp	po,rrc_51
-;		inc_error_cnt
-;rrc_51:		ld	a,(iy-2)
-;		cp	a,data_80
-;		jr	z,rrc_52
-;		inc_error_cnt
-;rrc_52:		ld	a,0
-;		ld	(iy+1),a
-;		rrc	(iy+1)
-;		jr	z,rr_0
-;		inc_error_cnt
-;rr_0:		scf
-;		ccf
-;		ld	a,data_aa
-;		rr	a
-;		jp	p,rr_1
-;		inc_error_cnt
-;rr_1:		jp	pe,rr_2
-;		inc_error_cnt
-;rr_2:		jr	nc,rr_3
-;		inc_error_cnt
-;rr_3:		jr	nz,rr_4
-;		inc_error_cnt
-;rr_4:		rr	a
-;		jr	c,rr_5
-;		inc_error_cnt
-;rr_5:		jp	po,rr_6
-;		inc_error_cnt
-;rr_6:		cp	a,#2a
-;		jr	z,rr_7
-;		inc_error_cnt
-;rr_7:		scf
-;		ld	a,0
-;		rr	a
-;		jp	m,rr_8
-;		inc_error_cnt
-;rr_8:		cp	a,data_80
-;		jr	z,rr_9
-;		inc_error_cnt
-;rr_9:		ld	a,0
-;		rr	a
-;		jr	z,rr_10
-;		inc_error_cnt
-;rr_10:		ld	b,data_55
-;		ld	c,data_aa
-;		rr	b
-;		jr	c,rr_11
-;		inc_error_cnt
-;rr_11:		rr	c
-;		jr	nc,rr_12
-;		inc_error_cnt
-;rr_12:		ld	a,b
-;		cp	a,#2a
-;		jr	z,rr_13
-;		inc_error_cnt
-;rr_13:		ld	a,c
-;		cp	a,#d5
-;		jr	z,rr_14
-;		inc_error_cnt
-;rr_14:		ld	d,data_7f
-;		ld	e,data_80
-;		rr	d
-;		jr	c,rr_15
-;		inc_error_cnt
-;rr_15:		rr	e
-;		jr	nc,rr_16
-;		inc_error_cnt
-;rr_16:		ld	a,d
-;		cp	a,#3f
-;		jr	z,rr_17
-;		inc_error_cnt
-;rr_17:		ld	a,e
-;		cp	a,#c0
-;		jr	z,rr_18
-;		inc_error_cnt
-;rr_18:		ld	hl,t_var2
-;		ld	(hl),data_55
-;		rr	(hl)
-;		jp	p,rr_19
-;		inc_error_cnt
-;rr_19:		jp	po,rr_20
-;		inc_error_cnt
-;rr_20:		jr	c,rr_21
-;		inc_error_cnt
-;rr_21:		jr	nz,rr_22
-;		inc_error_cnt
-;rr_22:		rr	(hl)
-;		jp	m,rr_23
-;		inc_error_cnt
-;rr_23:		jp	pe,rr_24
-;		inc_error_cnt
-;rr_24:		jr	nc,rr_25
-;		inc_error_cnt
-;rr_25:		ld	a,(hl)
-;		cp	a,#95
-;		jr	z,rr_26
-;		inc_error_cnt
-;rr_26:		ld	(hl),0
-;		rr	(hl)
-;		jr	z,rr_27
-;		inc_error_cnt
-;rr_27:		ld	ix,t_var3
-;		ld	a,data_55
-;		ld	(ix-2),a
-;		rr	(ix-2)
-;		jp	p,rr_28
-;		inc_error_cnt
-;rr_28:		jp	po,rr_29
-;		inc_error_cnt
-;rr_29:		jr	c,rr_30
-;		inc_error_cnt
-;rr_30:		jr	nz,rr_31
-;		inc_error_cnt
-;rr_31:		rr	(ix-2)
-;		jp	m,rr_32
-;		inc_error_cnt
-;rr_32:		jp	pe,rr_33
-;		inc_error_cnt
-;rr_33:		jr	nc,rr_34
-;		inc_error_cnt
-;rr_34:		ld	a,(ix-2)
-;		cp	a,#95
-;		jr	z,rr_35
-;		inc_error_cnt
-;rr_35:		ld	a,0
-;		ld	(ix+2),a
-;		rr	(ix+2)
-;		jr	z,rr_36
-;		inc_error_cnt
-;rr_36:		ld	iy,t_var3
-;		ld	a,data_55
-;		ld	(iy+2),a
-;		rr	(iy+2)
-;		jp	p,rr_37
-;		inc_error_cnt
-;rr_37:		jp	po,rr_38
-;		inc_error_cnt
-;rr_38:		jr	c,rr_39
-;		inc_error_cnt
-;rr_39:		jr	nz,rr_40
-;		inc_error_cnt
-;rr_40:		rr	(iy+2)
-;		jp	m,rr_41
-;		inc_error_cnt
-;rr_41:		jp	pe,rr_42
-;		inc_error_cnt
-;rr_42:		jr	nc,rr_43
-;		inc_error_cnt
-;rr_43:		ld	a,(iy+2)
-;		cp	a,#95
-;		jr	z,rr_44
-;		inc_error_cnt
-;rr_44:		ld	a,0
-;		ld	(iy-1),a
-;		rr	(iy-1)
-;		jr	z,sla_0
-;		inc_error_cnt
-;sla_0:		ld	a,data_55
-;		sla	a
-;		jp	m,sla_1
-;		inc_error_cnt
-;sla_1:		jp	pe,sla_2
-;		inc_error_cnt
-;sla_2:		jr	nc,sla_3
-;		inc_error_cnt
-;sla_3:		jr	nz,sla_4
-;		inc_error_cnt
-;sla_4:		sla	a
-;		jp	p,sla_5
-;		inc_error_cnt
-;sla_5:		jp	po,sla_6
-;		inc_error_cnt
-;sla_6:		jr	c,sla_7
-;		inc_error_cnt
-;sla_7:		cp	a,data_55-1
-;		jr	z,sla_8
-;		inc_error_cnt
-;sla_8:		ld	a,0
-;		sla	a
-;		jr	z,sla_9
-;		inc_error_cnt
-;sla_9:		ld	b,data_80
-;		ld	c,data_7f
-;		sla	b
-;		jr	c,sla_10
-;		inc_error_cnt
-;sla_10:		ld	a,b
-;		cp	a,0
-;		jr	z,sla_11
-;		inc_error_cnt
-;sla_11:		sla	c
-;		jp	m,sla_12
-;		inc_error_cnt
-;sla_12:		ld	a,c
-;		cp	a,data_ff-1
-;		jr	z,sla_13
-;		inc_error_cnt
-;sla_13:		ld	d,data_aa
-;		ld	e,data_55
-;		sla	d
-;		jr	c,sla_14
-;		inc_error_cnt
-;sla_14:		ld	a,d
-;		cp	a,data_55-1
-;		jr	z,sla_15
-;		inc_error_cnt
-;sla_15:		sla	e
-;		jp	m,sla_16
-;		inc_error_cnt
-;sla_16:		ld	a,e
-;		cp	a,data_aa
-;		jr	z,sla_17
-;		inc_error_cnt
-;sla_17:		ld	h,#12      ;bjp was >data_1234
-;		ld	l,#34      ;bjp was >data_1234
-;		sla	h
-;		jp	p,sla_18
-;		inc_error_cnt
-;sla_18:		ld	a,h
-;		cp	a,#24
-;		jr	z,sla_19
-;		inc_error_cnt
-;sla_19:		sla	l
-;		jp	p,sla_20
-;		inc_error_cnt
-;sla_20:		ld	a,l
-;		cp	a,#68
-;		jr	z,sla_21
-;		inc_error_cnt
-;sla_21:		ld	hl,t_var3
-;		ld	(hl),data_55
-;		sla	(hl)
-;		jp	m,sla_22
-;		inc_error_cnt
-;sla_22:		jp	pe,sla_23
-;		inc_error_cnt
-;sla_23:		jr	nc,sla_24
-;		inc_error_cnt
-;sla_24:		jr	nz,sla_25
-;		inc_error_cnt
-;sla_25:		sla	(hl)
-;		jp	p,sla_26
-;		inc_error_cnt
-;sla_26:		jp	po,sla_27
-;		inc_error_cnt
-;sla_27:		jr	c,sla_28
-;		inc_error_cnt
-;sla_28:		ld	a,(hl)
-;		cp	a,data_55-1
-;		jr	z,sla_29
-;		inc_error_cnt
-;sla_29:		ld	(hl),0
-;		sla	(hl)
-;		jr	z,sla_30
-;		inc_error_cnt
-;sla_30:		ld	ix,t_var3
-;		ld	a,data_55
-;		ld	(ix-2),a
-;		sla	(ix-2)
-;		jp	m,sla_31
-;		inc_error_cnt
-;sla_31:		jp	pe,sla_32
-;		inc_error_cnt
-;sla_32:		jr	nc,sla_33
-;		inc_error_cnt
-;sla_33:		jr	nz,sla_34
-;		inc_error_cnt
-;sla_34:		sla	(ix-2)
-;		jp	p,sla_35
-;		inc_error_cnt
-;sla_35:		jp	po,sla_36
-;		inc_error_cnt
-;sla_36:		jr	c,sla_37
-;		inc_error_cnt
-;sla_37:		ld	a,(ix-2)
-;		cp	a,data_55-1
-;		jr	z,sla_38
-;		inc_error_cnt
-;sla_38:		ld	a,data_80
-;		ld	(ix+2),a
-;		sla	(ix+2)
-;		jr	z,sla_39
-;		inc_error_cnt
-;sla_39:		jr	c,sla_40
-;		inc_error_cnt
-;sla_40:		ld	iy,t_var3
-;		ld	a,data_55
-;		ld	(iy+2),a
-;		sla	(iy+2)
-;		jp	m,sla_41
-;		inc_error_cnt
-;sla_41:		jp	pe,sla_42
-;		inc_error_cnt
-;sla_42:		jr	nc,sla_43
-;		inc_error_cnt
-;sla_43:		jr	nz,sla_44
-;		inc_error_cnt
-;sla_44:		sla	(iy+2)
-;		jp	p,sla_45
-;		inc_error_cnt
-;sla_45:		jp	po,sla_46
-;		inc_error_cnt
-;sla_46:		jr	c,sla_47
-;		inc_error_cnt
-;sla_47:		ld	a,(iy+2)
-;		cp	a,data_55-1
-;		jr	z,sla_48
-;		inc_error_cnt
-;sla_48:		ld	a,data_80
-;		ld	(iy-2),a
-;		sla	(iy-2)
-;		jr	z,sla_49
-;		inc_error_cnt
-;sla_49:		jr	c,sra_0
-;		inc_error_cnt
-;sra_0:		ld	a,data_55
-;		sra	a
-;		jp	p,sra_1
-;		inc_error_cnt
-;sra_1:		jp	po,sra_2
-;		inc_error_cnt
-;sra_2:		jr	c,sra_3
-;		inc_error_cnt
-;sra_3:		jr	nz,sra_4
-;		inc_error_cnt
-;sra_4:		sra	a
-;		jp	po,sra_5
-;		inc_error_cnt
-;sra_5:		jr	nc,sra_6
-;		inc_error_cnt
-;sra_6:		sra	a
-;		jp	pe,sra_7
-;		inc_error_cnt
-;sra_7:		cp	a,#0a			;data_aa.and.#0f
-;		jr	z,sra_8
-;		inc_error_cnt
-;sra_8:		ld	a,1
-;		sra	a
-;		jr	c,sra_9
-;		inc_error_cnt
-;sra_9:		jr	z,sra_10
-;		inc_error_cnt
-;sra_10:		ld	a,data_80
-;		sra	a
-;		jp	m,sra_11
-;		inc_error_cnt
-;sra_11:		cp	a,#c0
-;		jr	z,sra_12
-;		inc_error_cnt
-;sra_12:		ld	b,data_7f
-;		ld	c,data_aa
-;		sra	b
-;		jr	c,sra_13
-;		inc_error_cnt
-;sra_13:		ld	a,b
-;		cp	a,#3f
-;		jr	z,sra_14
-;		inc_error_cnt
-;sra_14:		sra	c
-;		jr	nc,sra_15
-;		inc_error_cnt
-;sra_15:		ld	a,c
-;		cp	a,#d5
-;		jr	z,sra_16
-;		inc_error_cnt
-;sra_16:		ld	d,data_55
-;		ld	e,data_ff
-;		sra	d
-;		jr	c,sra_17
-;		inc_error_cnt
-;sra_17:		ld	a,d
-;		cp	a,#2a
-;		jr	z,sra_18
-;		inc_error_cnt
-;sra_18:		sra	e
-;		jp	m,sra_19
-;		inc_error_cnt
-;sra_19:		ld	a,e
-;		cp	a,data_ff
-;		jr	z,sra_20
-;		inc_error_cnt
-;sra_20:		ld	h,data_aa
-;		ld	l,data_7f
-;		sra	h
-;		jp	m,sra_21
-;		inc_error_cnt
-;sra_21:		ld	a,h
-;		cp	a,#d5
-;		jr	z,sra_22
-;		inc_error_cnt
-;sra_22:		sra	l
-;		jr	c,sra_23
-;		inc_error_cnt
-;sra_23:		ld	a,l
-;		cp	a,#3f
-;		jr	z,sra_24
-;		inc_error_cnt
-;sra_24:		ld	hl,t_var1
-;		ld	(hl),data_55
-;		sra	(hl)
-;		jp	p,sra_25
-;		inc_error_cnt
-;sra_25:		jp	po,sra_26
-;		inc_error_cnt
-;sra_26:		jr	c,sra_27
-;		inc_error_cnt
-;sra_27:		jr	nz,sra_28
-;		inc_error_cnt
-;sra_28:		sra	(hl)
-;		jr	nc,sra_29
-;		inc_error_cnt
-;sra_29:		sra	(hl)
-;		jp	pe,sra_30
-;		inc_error_cnt
-;sra_30:		ld	a,(hl)
-;		cp	a,#0a			;data_aa.and.#0f
-;		jr	z,sra_31
-;		inc_error_cnt
-;sra_31:		ld	(hl),data_80
-;		sra	(hl)
-;		jp	m,sra_32
-;		inc_error_cnt
-;sra_32:		ld	a,(hl)
-;		cp	a,#c0
-;		jr	z,sra_33
-;		inc_error_cnt
-;sra_33:		ld	(hl),1
-;		sra	(hl)
-;		jr	c,sra_34
-;		inc_error_cnt
-;sra_34:		jr	z,sra_35
-;		inc_error_cnt
-;sra_35:		ld	ix,t_var3
-;		ld	a,data_55
-;		ld	(ix-2),a
-;		sra	(ix-2)
-;		jp	p,sra_36
-;		inc_error_cnt
-;sra_36:		jp	po,sra_37
-;		inc_error_cnt
-;sra_37:		jr	c,sra_38
-;		inc_error_cnt
-;sra_38:		jr	nz,sra_39
-;		inc_error_cnt
-;sra_39:		sra	(ix-2)
-;		jr	nc,sra_40
-;		inc_error_cnt
-;sra_40:		sra	(ix-2)
-;		jp	pe,sra_41
-;		inc_error_cnt
-;sra_41:		ld	a,(ix-2)
-;		cp	a,#0a		;data_aa.and.#0f
-;		jr	z,sra_42
-;		inc_error_cnt
-;sra_42:		ld	a,data_80
-;		ld	(ix+2),a
-;		sra	(ix+2)
-;		jp	m,sra_43
-;		inc_error_cnt
-;sra_43:		ld	a,(ix+2)
-;		cp	a,#c0
-;		jr	z,sra_44
-;		inc_error_cnt
-;sra_44:		ld	a,1
-;		ld	(ix-1),a
-;		sra	(ix-1)
-;		jr	c,sra_45
-;		inc_error_cnt
-;sra_45:		jr	z,sra_46
-;		inc_error_cnt
-;sra_46:		ld	iy,t_var3
-;		ld	a,data_55
-;		ld	(iy-2),a
-;		sra	(iy-2)
-;		jp	p,sra_47
-;		inc_error_cnt
-;sra_47:		jp	po,sra_48
-;		inc_error_cnt
-;sra_48:		jr	c,sra_49
-;		inc_error_cnt
-;sra_49:		jr	nz,sra_50
-;		inc_error_cnt
-;sra_50:		sra	(iy-2)
-;		jr	nc,sra_51
-;		inc_error_cnt
-;sra_51:		sra	(iy-2)
-;		jp	pe,sra_52
-;		inc_error_cnt
-;sra_52:		ld	a,(iy-2)
-;		cp	a,#0a		;data_aa.and.#0f
-;		jr	z,sra_53
-;		inc_error_cnt
-;sra_53:		ld	a,data_80
-;		ld	(iy+2),a
-;		sra	(iy+2)
-;		jp	m,sra_54
-;		inc_error_cnt
-;sra_54:		ld	a,(iy+2)
-;		cp	a,#c0
-;		jr	z,sra_55
-;		inc_error_cnt
-;sra_55:		ld	a,1
-;		ld	(iy-1),a
-;		sra	(iy-1)
-;		jr	c,sra_56
-;		inc_error_cnt
-;sra_56:		jr	z,srl_0
-;		inc_error_cnt
-;srl_0:		ld	a,data_55
-;		srl	a
-;		jr	c,srl_1
-;		inc_error_cnt
-;srl_1:		jp	po,srl_2
-;		inc_error_cnt
-;srl_2:		srl	a
-;		jr	nc,srl_3
-;		inc_error_cnt
-;srl_3:		srl	a
-;		jp	pe,srl_4
-;		inc_error_cnt
-;srl_4:		cp	a,#0a			;data_aa.and.#0f
-;		jr	z,srl_5
-;		inc_error_cnt
-;srl_5:		ld	a,data_80
-;		and	a
-;		jp	m,srl_6
-;		inc_error_cnt
-;srl_6:		srl	a
-;		jp	p,srl_7
-;		inc_error_cnt
-;srl_7:		ld	a,2
-;		srl	a
-;		jr	nz,srl_8
-;		inc_error_cnt
-;srl_8:		srl	a
-;		jr	z,srl_9
-;		inc_error_cnt
-;srl_9:		jr	c,srl_10
-;		inc_error_cnt
-;srl_10:		ld	b,data_aa
-;		srl	b
-;		jp	p,srl_11
-;		inc_error_cnt
-;srl_11:		ld	a,b
-;		cp	a,data_55
-;		jr	z,srl_12
-;		inc_error_cnt
-;srl_12:		ld	c,data_7f
-;		srl	c
-;		jr	c,srl_13
-;		inc_error_cnt
-;srl_13:		ld	a,c
-;		cp	a,#3f
-;		jr	z,srl_14
-;		inc_error_cnt
-;srl_14:		ld	d,data_55
-;		srl	d
-;		jr	c,srl_15
-;		inc_error_cnt
-;srl_15:		ld	a,d
-;		cp	a,#2a
-;		jr	z,srl_16
-;		inc_error_cnt
-;srl_16:		ld	e,data_ff
-;		srl	e
-;		jr	c,srl_17
-;		inc_error_cnt
-;srl_17:		ld	a,e
-;		cp	a,data_7f
-;		jr	z,srl_18
-;		inc_error_cnt
-;srl_18:		ld	h,#12      ;bjp was >data_1234
-;		srl	h
-;		jr	nc,srl_19
-;		inc_error_cnt
-;srl_19:		ld	a,h
-;		cp	a,9
-;		jr	z,srl_20
-;		inc_error_cnt
-;srl_20:		ld	l,#34      ;bjp was >data_1234
-;		srl	l
-;		jr	nc,srl_21
-;		inc_error_cnt
-;srl_21:		ld	a,l
-;		cp	a,#1a
-;		jr	z,srl_22
-;		inc_error_cnt
-;srl_22:		ld	hl,t_var1
-;		ld	(hl),data_55
-;		srl	(hl)
-;		jr	c,srl_23
-;		inc_error_cnt
-;srl_23:		jp	po,srl_24
-;		inc_error_cnt
-;srl_24:		srl	(hl)
-;		jr	nc,srl_25
-;		inc_error_cnt
-;srl_25:		srl	(hl)
-;		jp	pe,srl_26
-;		inc_error_cnt
-;srl_26:		ld	a,(hl)
-;		cp	a,#0a			;data_aa.and.#0f
-;		jr	z,srl_27
-;		inc_error_cnt
-;srl_27:		ld	(hl),data_80
-;		and	(hl)
-;		jp	z,srl_28
-;		inc_error_cnt
-;srl_28:		srl	(hl)
-;		jp	p,srl_29
-;		inc_error_cnt
-;srl_29:		ld	a,(hl)
-;		cp	a,#40
-;		jr	z,srl_30
-;		inc_error_cnt
-;srl_30:		ld	(hl),2
-;		srl	(hl)
-;		jr	nz,srl_31
-;		inc_error_cnt
-;srl_31:		srl	(hl)
-;		jr	z,srl_32
-;		inc_error_cnt
-;srl_32:		jr	c,srl_33
-;		inc_error_cnt
-;srl_33:		ld	ix,t_var3
-;		ld	a,data_55
-;		ld	(ix+2),a
-;		srl	(ix+2)
-;		jr	c,srl_34
-;		inc_error_cnt
-;srl_34:		jp	po,srl_35
-;		inc_error_cnt
-;srl_35:		srl	(ix+2)
-;		jr	nc,srl_36
-;		inc_error_cnt
-;srl_36:		srl	(ix+2)
-;		jp	pe,srl_37
-;		inc_error_cnt
-;srl_37:		ld	a,(ix+2)
-;		cp	a,#0a			;data_aa.and.#0f
-;		jr	z,srl_38
-;		inc_error_cnt
-;srl_38:		ld	a,data_80
-;		ld	(ix-2),a
-;		and	(ix-2)
-;		jp	m,srl_39
-;		inc_error_cnt
-;srl_39:		srl	(ix-2)
-;		jp	p,srl_40
-;		inc_error_cnt
-;srl_40:		ld	a,(ix-2)
-;		cp	a,#40
-;		jr	z,srl_41
-;		inc_error_cnt
-;srl_41:		ld	a,2
-;		ld	(ix+1),a
-;		srl	(ix+1)
-;		jr	nz,srl_42
-;		inc_error_cnt
-;srl_42:		srl	(ix+1)
-;		jr	z,srl_43
-;		inc_error_cnt
-;srl_43:		jr	c,srl_44
-;		inc_error_cnt
-;srl_44:		ld	iy,t_var3
-;		ld	a,data_55
-;		ld	(iy+2),a
-;		srl	(iy+2)
-;		jr	c,srl_45
-;		inc_error_cnt
-;srl_45:		jp	po,srl_46
-;		inc_error_cnt
-;srl_46:		srl	(iy+2)
-;		jr	nc,srl_47
-;		inc_error_cnt
-;srl_47:		srl	(iy+2)
-;		jp	pe,srl_48
-;		inc_error_cnt
-;srl_48:		ld	a,(iy+2)
-;		cp	a,#0a			;data_aa.and.#0f
-;		jr	z,srl_49
-;		inc_error_cnt
-;srl_49:		ld	a,data_80
-;		ld	(iy-2),a
-;		and	(iy-2)
-;		jp	m,srl_50
-;		inc_error_cnt
-;srl_50:		srl	(iy-2)
-;		jp	p,srl_51
-;		inc_error_cnt
-;srl_51:		ld	a,(iy-2)
-;		cp	a,#40
-;		jr	z,srl_52
-;		inc_error_cnt
-;srl_52:		ld	a,2
-;		ld	(iy+1),a
-;		srl	(iy+1)
-;		jr	nz,srl_53
-;		inc_error_cnt
-;srl_53:		srl	(iy+1)
-;		jr	z,srl_54
-;		inc_error_cnt
-;srl_54:		jr	c,rld_0
-;		inc_error_cnt
-;rld_0:		ld	hl,t_var5
-;		ld	a,data_55
-;		ld	(hl),data_aa
-;		rld
-;		jp	p,rld_1
-;		inc_error_cnt
-;rld_1:		cp	a,data_55+5
-;		jr	z,rld_2
-;		inc_error_cnt
-;rld_2:		ld	a,(hl)
-;		cp	a,data_aa-5
-;		jr	z,rld_3
-;		inc_error_cnt
-;rld_3:		ld	(hl),data_7f
-;		ld	a,data_80
-;		rld
-;		jp	m,rld_4
-;		inc_error_cnt
-;rld_4:		jp	pe,rld_5
-;		inc_error_cnt
-;rld_5:		rld
-;		jp	po,rld_6
-;		inc_error_cnt
-;rld_6:		cp	a,data_80+15
-;		jr	z,rld_7
-;		inc_error_cnt
-;rld_7:		ld	a,(hl)
-;		cp	a,7
-;		jr	z,rld_8
-;		inc_error_cnt
-;rld_8:		ld	a,#05			;data_55.and.#0f
-;		ld	(hl),#0a			;data_aa.and.#0f
-;		rld
-;		jr	z,rld_9
-;		inc_error_cnt
-;rld_9:		ld	a,(hl)
-;		cp	a,#a5
-;		jr	z,rrd_0
-;		inc_error_cnt
-;rrd_0:		ld	hl,t_var3
-;		ld	a,data_55
-;		ld	(hl),data_aa
-;		rrd
-;		jp	p,rrd_1
-;		inc_error_cnt
-;rrd_1:		jp	pe,rrd_2
-;		inc_error_cnt
-;rrd_2:		jr	nz,rrd_3
-;		inc_error_cnt
-;rrd_3:		cp	a,data_55+5
-;		jr	z,rrd_4
-;		inc_error_cnt
-;rrd_4:		ld	a,(hl)
-;		cp	a,data_55+5
-;		jr	z,rrd_5
-;		inc_error_cnt
-;rrd_5:		ld	(hl),data_7f
-;		ld	a,data_80
-;		rrd
-;		jp	m,rrd_6
-;		inc_error_cnt
-;rrd_6:		jp	po,rrd_7
-;		inc_error_cnt
-;rrd_7:		cp	a,data_80+15
-;		jr	z,rrd_8
-;		inc_error_cnt
-;rrd_8:		ld	a,(hl)
-;		cp	a,7
-;		jr	z,rrd_9
-;		inc_error_cnt
-;rrd_9:		ld	a,8
-;		ld	(hl),0
-;		rrd
-;		jr	z,rrd_10
-;		inc_error_cnt
-;rrd_10:		ld	a,(hl)
-;		cp	a,data_80
-;		jr	z,bit_0
-;		inc_error_cnt
-;bit_0:		ld	a,data_ff
-;		bit	0,a
-;		jr	nz,bit_1
-;		inc_error_cnt
-;bit_1:		bit	1,a
-;		jr	nz,bit_2
-;		inc_error_cnt
-;bit_2:		bit	2,a
-;		jr	nz,bit_3
-;		inc_error_cnt
-;bit_3:		bit	3,a
-;		jr	nz,bit_4
-;		inc_error_cnt
-;bit_4:		bit	4,a
-;		jr	nz,bit_5
-;		inc_error_cnt
-;bit_5:		bit	5,a
-;		jr	nz,bit_6
-;		inc_error_cnt
-;bit_6:		bit	6,a
-;		jr	nz,bit_7
-;		inc_error_cnt
-;bit_7:		bit	7,a
-;		jr	nz,bit_8
-;		inc_error_cnt
-;bit_8:		ld	a,0
-;		bit	0,a
-;		jr	z,bit_9
-;		inc_error_cnt
-;bit_9:		bit	1,a
-;		jr	z,bit_10
-;		inc_error_cnt
-;bit_10:		bit	2,a
-;		jr	z,bit_11
-;		inc_error_cnt
-;bit_11:		bit	3,a
-;		jr	z,bit_12
-;		inc_error_cnt
-;bit_12:		bit	4,a
-;		jr	z,bit_13
-;		inc_error_cnt
-;bit_13:		bit	5,a
-;		jr	z,bit_14
-;		inc_error_cnt
-;bit_14:		bit	6,a
-;		jr	z,bit_15
-;		inc_error_cnt
-;bit_15:		bit	7,a
-;		jr	z,bit_16
-;		inc_error_cnt
-;bit_16:		ld	b,data_80
-;		bit	2,b
-;		jr	z,bit_17
-;		inc_error_cnt
-;bit_17:		bit	7,b
-;		jr	nz,bit_18
-;		inc_error_cnt
-;bit_18:		ld	c,data_55
-;		bit	7,c
-;		jr	z,bit_19
-;		inc_error_cnt
-;bit_19:		bit	0,c
-;		jr	nz,bit_20
-;		inc_error_cnt
-;bit_20:		ld	d,data_aa
-;		bit	7,d
-;		jr	nz,bit_21
-;		inc_error_cnt
-;bit_21:		bit	4,d
-;		jr	z,bit_22
-;		inc_error_cnt
-;bit_22:		ld	e,data_7f
-;		bit	7,e
-;		jr	z,bit_23
-;		inc_error_cnt
-;bit_23:		bit	3,e
-;		jr	nz,bit_24
-;		inc_error_cnt
-;bit_24:		ld	h,#12      ;bjp was >data_1234
-;		bit	4,h
-;		jr	nz,bit_25
-;		inc_error_cnt
-;bit_25:		bit	2,h
-;		jr	z,bit_26
-;		inc_error_cnt
-;bit_26:		ld	l,#34      ;bjp was >data_1234
-;		bit	3,l
-;		jr	z,bit_27
-;		inc_error_cnt
-;bit_27:		bit	2,l
-;		jr	nz,bit_28
-;		inc_error_cnt
-;bit_28:		ld	hl,t_var4
-;		ld	(hl),data_55
-;		bit	0,(hl)
-;		jr	nz,bit_29
-;		inc_error_cnt
-;bit_29:		bit	1,(hl)
-;		jr	z,bit_30
-;		inc_error_cnt
-;bit_30:		bit	2,(hl)
-;		jr	nz,bit_31
-;		inc_error_cnt
-;bit_31:		bit	3,(hl)
-;		jr	z,bit_32
-;		inc_error_cnt
-;bit_32:		bit	4,(hl)
-;		jr	nz,bit_33
-;		inc_error_cnt
-;bit_33:		bit	5,(hl)
-;		jr	z,bit_34
-;		inc_error_cnt
-;bit_34:		bit	6,(hl)
-;		jr	nz,bit_35
-;		inc_error_cnt
-;bit_35:		bit	7,(hl)
-;		jr	z,bit_36
-;		inc_error_cnt
-;bit_36:		ld	ix,t_var3
-;		ld	a,data_aa
-;		ld	(ix-2),a
-;		bit	0,(ix-2)
-;		jr	z,bit_37
-;		inc_error_cnt
-;bit_37:		bit	1,(ix-2)
-;		jr	nz,bit_38
-;		inc_error_cnt
-;bit_38:		bit	2,(ix-2)
-;		jr	z,bit_39
-;		inc_error_cnt
-;bit_39:		bit	3,(ix-2)
-;		jr	nz,bit_40
-;		inc_error_cnt
-;bit_40:		bit	4,(ix-2)
-;		jr	z,bit_41
-;		inc_error_cnt
-;bit_41:		bit	5,(ix-2)
-;		jr	nz,bit_42
-;		inc_error_cnt
-;bit_42:		bit	6,(ix-2)
-;		jr	z,bit_43
-;		inc_error_cnt
-;bit_43:		bit	7,(ix-2)
-;		jr	nz,bit_44
-;		inc_error_cnt
-;bit_44:		ld	iy,t_var3
-;		ld	a,data_55
-;		ld	(iy+2),a
-;		bit	0,(iy+2)
-;		jr	nz,bit_45
-;		inc_error_cnt
-;bit_45:		bit	1,(iy+2)
-;		jr	z,bit_46
-;		inc_error_cnt
-;bit_46:		bit	2,(iy+2)
-;		jr	nz,bit_47
-;		inc_error_cnt
-;bit_47:		bit	3,(iy+2)
-;		jr	z,bit_48
-;		inc_error_cnt
-;bit_48:		bit	4,(iy+2)
-;		jr	nz,bit_49
-;		inc_error_cnt
-;bit_49:		bit	5,(iy+2)
-;		jr	z,bit_50
-;		inc_error_cnt
-;bit_50:		bit	6,(iy+2)
-;		jr	nz,bit_51
-;		inc_error_cnt
-;bit_51:		bit	7,(iy+2)
-;		jr	z,set_0
-;		inc_error_cnt
-;set_0:		ld	a,0
-;		set	0,a
-;		set	2,a
-;		set	4,a
-;		set	6,a
-;		cp	a,data_55
-;		jr	z,set_1
-;		inc_error_cnt
-;set_1:		set	1,a
-;		set	3,a
-;		set	5,a
-;		set	7,a
-;		cp	a,data_ff
-;		jr	z,set_2
-;		inc_error_cnt
-;set_2:		ld	b,0
-;		set	1,b
-;		set	3,b
-;		ld	a,b
-;		cp	a,#0a			;data_aa.and.#0f
-;		jr	z,set_3
-;		inc_error_cnt
-;set_3:		ld	c,0
-;		set	1,c
-;		set	4,c
-;		ld	a,c
-;		cp	a,#12      ;bjp was >data_1234
-;		jr	z,set_4
-;		inc_error_cnt
-;set_4:		ld	d,0
-;		set	2,d
-;		set	4,d
-;		set	5,d
-;		ld	a,d
-;		cp	a,#34      ;bjp was >data_1234
-;		jr	z,set_5
-;		inc_error_cnt
-;set_5:		ld	e,0
-;		set	7,e
-;		ld	a,e
-;		cp	a,data_80
-;		jr	z,set_6
-;		inc_error_cnt
-;set_6:		ld	h,0
-;		set	0,h
-;		set	2,h
-;		set	4,h
-;		set	6,h
-;		ld	a,h
-;		cp	a,data_55
-;		jr	z,set_7
-;		inc_error_cnt
-;set_7:		ld	l,0
-;		set	1,l
-;		set	3,l
-;		set	5,l
-;		set	7,l
-;		ld	a,l
-;		cp	a,data_aa
-;		jr	z,set_8
-;		inc_error_cnt
-;set_8:		ld	hl,t_var5
-;		ld	(hl),0
-;		set	0,(hl)
-;		set	2,(hl)
-;		set	4,(hl)
-;		set	6,(hl)
-;		ld	a,(hl)
-;		cp	a,data_55
-;		jr	z,set_9
-;		inc_error_cnt
-;set_9:		ld	(hl),0
-;		set	1,(hl)
-;		set	3,(hl)
-;		set	5,(hl)
-;		set	7,(hl)
-;		ld	a,(hl)
-;		cp	a,data_aa
-;		jr	z,set_10
-;		inc_error_cnt
-;set_10:		ld	ix,t_var3
-;		ld	a,0
-;		ld	(ix-2),a
-;		ld	(ix+2),a
-;		set	0,(ix-2)
-;		set	2,(ix-2)
-;		set	4,(ix-2)
-;		set	6,(ix-2)
-;		ld	a,(ix-2)
-;		cp	a,data_55
-;		jr	z,set_11
-;		inc_error_cnt
-;set_11:		set	1,(ix+2)
-;		set	3,(ix+2)
-;		set	5,(ix+2)
-;		set	7,(ix+2)
-;		ld	a,(ix+2)
-;		cp	a,data_aa
-;		jr	z,set_12
-;		inc_error_cnt
-;set_12:		ld	iy,t_var3
-;		ld	a,0
-;		ld	(iy-1),a
-;		ld	(iy+1),a
-;		set	0,(iy-1)
-;		set	2,(iy-1)
-;		set	4,(iy-1)
-;		set	6,(iy-1)
-;		ld	a,(iy-1)
-;		cp	a,data_55
-;		jr	z,set_13
-;		inc_error_cnt
-;set_13:		set	1,(iy+1)
-;		set	3,(iy+1)
-;		set	5,(iy+1)
-;		set	7,(iy+1)
-;		ld	a,(iy+1)
-;		cp	a,data_aa
-;		jr	z,res_0
-;		inc_error_cnt
-;res_0:		ld	a,data_ff
-;		res	7,a
-;		cp	a,data_7f
-;		jr	z,res_1
-;		inc_error_cnt
-;res_1:		res	5,a
-;		res	3,a
-;		res	1,a
-;		cp	a,data_55
-;		jr	z,res_2
-;		inc_error_cnt
-;res_2:		ld	a,data_ff
-;		res	0,a
-;		res	2,a
-;		res	4,a
-;		res	6,a
-;		cp	a,data_aa
-;		jr	z,res_3
-;		inc_error_cnt
-;res_3:		ld	b,data_ff
-;		res	7,b
-;		ld	a,b
-;		cp	a,data_7f
-;		jr	z,res_4
-;		inc_error_cnt
-;res_4:		ld	c,data_ff
-;		res	0,c
-;		res	1,c
-;		res	2,c
-;		res	3,c
-;		res	4,c
-;		res	5,c
-;		res	6,c
-;		ld	a,c
-;		cp	a,data_80
-;		jr	z,res_5
-;		inc_error_cnt
-;res_5:		ld	d,data_ff
-;		res	0,d
-;		res	2,d
-;		res	4,d
-;		res	6,d
-;		ld	a,d
-;		cp	a,data_aa
-;		jr	z,res_6
-;		inc_error_cnt
-;res_6:		ld	e,data_ff
-;		res	1,e
-;		res	3,e
-;		res	5,e
-;		res	7,e
-;		ld	a,e
-;		cp	a,data_55
-;		jr	z,res_7
-;		inc_error_cnt
-;res_7:		ld	h,data_ff
-;		res	0,h
-;		res	2,h
-;		res	3,h
-;		res	5,h
-;		res	6,h
-;		res	7,h
-;		ld	a,h
-;		cp	a,#12      ;bjp was >data_1234
-;		jr	z,res_8
-;		inc_error_cnt
-;res_8:		ld	l,data_ff
-;		res	0,l
-;		res	1,l
-;		res	3,l
-;		res	6,l
-;		res	7,l
-;		ld	a,l
-;		cp	a,#34      ;bjp was >data_1234
-;		jr	z,res_9
-;		inc_error_cnt
-;res_9:		ld	hl,t_var3
-;		ld	(hl),data_ff
-;		res	0,(hl)
-;		res	2,(hl)
-;		res	4,(hl)
-;		res	6,(hl)
-;		ld	a,(hl)
-;		cp	a,data_aa
-;		jr	z,res_10
-;		inc_error_cnt
-;res_10:		res	1,(hl)
-;		res	3,(hl)
-;		res	5,(hl)
-;		res	7,(hl)
-;		ld	a,(hl)
-;		cp	a,0
-;		jr	z,res_11
-;		inc_error_cnt
-;res_11:		ld	ix,t_var3
-;		ld	a,data_ff
-;		ld	(ix-2),a
-;		ld	(ix+2),a
-;		res	1,(ix-2)
-;		res	3,(ix-2)
-;		res	5,(ix-2)
-;		res	7,(ix-2)
-;		ld	a,(ix-2)
-;		cp	a,data_55
-;		jr	z,res_12
-;		inc_error_cnt
-;res_12:		res	0,(ix+2)
-;		res	2,(ix+2)
-;		res	4,(ix+2)
-;		res	6,(ix+2)
-;		ld	a,(ix+2)
-;		cp	a,data_aa
-;		jr	z,res_13
-;		inc_error_cnt
-;res_13:		ld	iy,t_var3
-;		ld	a,data_ff
-;		ld	(iy-1),a
-;		ld	(iy+1),a
-;		res	1,(iy-1)
-;		res	3,(iy-1)
-;		res	5,(iy-1)
-;		res	7,(iy-1)
-;		ld	a,(iy-1)
-;		cp	a,data_55
-;		jr	z,res_14
-;		inc_error_cnt
-;res_14:		res	0,(iy+1)
-;		res	2,(iy+1)
-;		res	4,(iy+1)
-;		res	6,(iy+1)
-;		ld	a,(iy+1)
-;		cp	a,data_aa
-;		jr	z,jp_0
-;		inc_error_cnt
-;jp_0:		jp	jp_1
-;		nop
-;		nop
-;		inc_error_cnt
-;jp_1:		ld	a,0
-;		and	a
-;		jp	z,jp_2
-;		inc_error_cnt
-;jp_2:		jp	nc,jp_3
-;		inc_error_cnt
-;jp_3:		ld	b,1
-;		sub	a,b
-;		jp	nz,jp_4
-;		inc_error_cnt
-;jp_4:		jp	c,jp_5
-;		inc_error_cnt
-;jp_5:		jp	jp_7
-;		inc_error_cnt
-;jp_6:		jp	jr_0
-;		inc_error_cnt
-;jp_7:		jp	jp_6
-;		inc_error_cnt
-;jr_0:		jr	jr_2
-;		inc_error_cnt
-;jr_1:		jr	jr_3
-;		inc_error_cnt
-;jr_2:		jr	jr_1
-;		inc_error_cnt
-;jr_3:		ld	hl,jp_9
-;		jp	(hl)
-;		inc_error_cnt
-;jp_8:		ld	ix,jp_10
-;		jp	(ix)
-;		inc_error_cnt
-;jp_9:		jp	jp_8
-;		inc_error_cnt
-;jp_10:		ld	iy,djnz_0
-;		jp	(iy)
-;		inc_error_cnt
-;djnz_0:		ld	b,5
-;		ld	a,0
-;djnz_1:		inc	a
-;		djnz	djnz_1
-;		cp	a,5
-;		jr	z,call_0
-;		inc_error_cnt
-;call_0:		ld	a,0
-;		call	sub1
-;		cp	a,data_7f
-;		jr	z,call_1
-;		inc_error_cnt
-;call_1:		ld	a,0
-;		and	a
-;		call	z,sub2
-;		cp	a,data_55
-;		jr	z,call_2
-;		inc_error_cnt
-;call_2:		ld	a,data_aa
-;		and	a
-;		call	nz,sub3
-;		cp	a,data_aa+1
-;		jr	z,call_3
-;		inc_error_cnt
-;call_3:		ld	a,0
-;		cp	a,0
-;		call	nc,sub4
-;		cp	a,data_ff
-;		jr	z,call_4
-;		inc_error_cnt
-;call_4:		ld	a,0
-;		sub	a,1
-;		call	c,sub5
-;		cp	a,data_ff-1
-;		jr	z,call_5
-;		inc_error_cnt
-;call_5:		ld	a,data_7f
-;		sla	a
-;		call	po,sub6
-;		cp	a,data_7f
-;		jr	z,call_6
-;		inc_error_cnt
-;call_6:		ld	a,data_aa
-;		srl	a
-;		call	pe,sub7
-;		cp	a,data_aa
-;		jr	z,call_7
-;		inc_error_cnt
-;call_7:		ld	a,data_80
-;		sra	a
-;		call	m,sub8
-;		cp	a,data_80
-;		jr	z,call_8
-;		inc_error_cnt
-;call_8:		ld	a,data_7f
-;		sra	a
-;		call	p,sub9
-;		cp	a,data_7f
-;		jr	z,rst_0
-;		inc_error_cnt
-;rst_0:		rst	#00
-;		cp	a,1
-;		jr	z,rst_1
-;		inc_error_cnt
-;rst_1:		rst	#08
-;		cp	a,2
-;		jr	z,rst_2
-;		inc_error_cnt
-;rst_2:		rst	#10
-;		cp	a,3
-;		jr	z,rst_3
-;		inc_error_cnt
-;rst_3:		rst	#18
-;		cp	a,4
-;		jr	z,rst_4
-;		inc_error_cnt
-;rst_4:		rst	#20
-;		cp	a,5
-;		jr	z,rst_5
-;		inc_error_cnt
-;rst_5:		rst	#28
-;		cp	a,6
-;		jr	z,rst_6
-;		inc_error_cnt
-;rst_6:		rst	#30
-;		cp	a,7
-;		jr	z,rst_7
-;		inc_error_cnt
-;rst_7:		rst	#38
-;		cp	a,8
-;		jr	z,in_0
-;		inc_error_cnt
-;in_0:		in	a,(in_port)
-;		cp	a,data_7f
-;		jr	z,in_1
-;		inc_error_cnt
-;in_1:		ld	c,in_port
-;		in	a,(c)
-;		jr	nz,in_2
-;		inc_error_cnt
-;in_2:		jp	p,in_3
-;		inc_error_cnt
-;in_3:		jp	pe,in_4
-;		inc_error_cnt
-;in_4:		cp	a,data_55
-;		jr	z,in_5
-;		inc_error_cnt
-;in_5:		in	a,(c)
-;		jp	m,in_6
-;		inc_error_cnt
-;in_6:		jp	po,in_7
-;		inc_error_cnt
-;in_7:		jr	nz,in_8
-;		inc_error_cnt
-;in_8:		cp	a,data_80
-;		jr	z,in_9
-;		inc_error_cnt
-;in_9:		in	a,(c)
-;		jr	z,in_10
-;		inc_error_cnt
-;in_10:		in	b,(c)
-;		jp	m,in_11
-;		inc_error_cnt
-;in_11:		ld	a,b
-;		cp	a,data_ff
-;		jr	z,in_12
-;		inc_error_cnt
-;in_12:		in	d,(c)
-;		jp	pe,in_13
-;		inc_error_cnt
-;in_13:		ld	a,d
-;		cp	a,data_aa
-;		jr	z,in_14
-;		inc_error_cnt
-;in_14:		in	e,(c)
-;		jp	p,in_15
-;		inc_error_cnt
-;in_15:		ld	a,e
-;		cp	a,data_7f
-;		jr	z,in_16
-;		inc_error_cnt
-;in_16:		in	h,(c)
-;		jp	pe,in_17
-;		inc_error_cnt
-;in_17:		ld	a,h
-;		cp	a,data_55
-;		jr	z,in_18
-;		inc_error_cnt
-;in_18:		in	l,(c)
-;		jp	m,in_19
-;		inc_error_cnt
-;in_19:		ld	a,l
-;		cp	a,data_80
-;		jr	z,in_20
-;		inc_error_cnt
-;in_20:		in	c,(c)
-;		jr	z,in_21
-;		inc_error_cnt
-;in_21:		ld	c,in_port
-;		ld	b,2
-;		ld	hl,t_var1
-;		ini
-;		jr	nz,in_22
-;		inc_error_cnt
-;in_22:		ini
-;		jr	z,in_23
-;		inc_error_cnt
-;in_23:		ld	hl,t_var1
-;		ld	a,(hl)
-;		cp	a,data_ff
-;		jr	z,in_24
-;		inc_error_cnt
-;in_24:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_aa
-;		jr	z,in_25
-;		inc_error_cnt
-;in_25:		ld	b,5
-;		ld	c,in_port
-;		ld	hl,t_var1
-;		inir
-;		jr	z,in_26
-;		inc_error_cnt
-;in_26:		ld	hl,t_var1
-;		ld	a,(hl)
-;		cp	a,data_7f
-;		jr	z,in_27
-;		inc_error_cnt
-;in_27:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_55
-;		jr	z,in_28
-;		inc_error_cnt
-;in_28:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_80
-;		jr	z,in_29
-;		inc_error_cnt
-;in_29:		inc	hl
-;		ld	a,(hl)
-;		cp	a,0
-;		jr	z,in_30
-;		inc_error_cnt
-;in_30:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_ff
-;		jr	z,in_31
-;		inc_error_cnt
-;in_31:		ld	b,2
-;		ld	c,in_port
-;		ld	hl,t_var5
-;		ind
-;		jr	nz,in_32
-;		inc_error_cnt
-;in_32:		ind
-;		jr	z,in_33
-;		inc_error_cnt
-;in_33:		ld	hl,t_var5
-;		ld	a,(hl)
-;		cp	a,data_aa
-;		jr	z,in_34
-;		inc_error_cnt
-;in_34:		dec	hl
-;		ld	a,(hl)
-;		cp	a,data_7f
-;		jr	z,in_35
-;		inc_error_cnt
-;in_35:		ld	b,5
-;		ld	c,in_port
-;		ld	hl,t_var5
-;		indr
-;		jr	z,in_36
-;		inc_error_cnt
-;in_36:		ld	hl,t_var5
-;		ld	a,(hl)
-;		cp	a,data_55
-;		jr	z,in_37
-;		inc_error_cnt
-;in_37:		dec	hl
-;		ld	a,(hl)
-;		cp	a,data_80
-;		jr	z,in_38
-;		inc_error_cnt
-;in_38:		dec	hl
-;		ld	a,(hl)
-;		cp	a,0
-;		jr	z,in_39
-;		inc_error_cnt
-;in_39:		dec	hl
-;		ld	a,(hl)
-;		cp	a,data_ff
-;		jr	z,in_40
-;		inc_error_cnt
-;in_40:		dec	hl
-;		ld	a,(hl)
-;		cp	a,data_aa
-;		jr	z,ldi_0
-;		inc_error_cnt
-;ldi_0:		ld	hl,t_var1
-;		ld	a,#12      ;bjp was >data_1234
-;		ld	(hl),a
-;		inc	hl
-;		ld	a,#34      ;bjp was >data_1234
-;		ld	(hl),a
-;		dec	hl
-;		ld	de,t_var3
-;		ld	bc,2
-;		ldi
-;		jp	pe,ldi_1
-;		inc_error_cnt
-;ldi_1:		ldi
-;		jp	po,ldi_2
-;		inc_error_cnt
-;ldi_2:		ld	hl,t_var3
-;		ld	a,(hl)
-;		cp	a,#12      ;bjp was >data_1234
-;		jr	z,ldi_3
-;		inc_error_cnt
-;ldi_3:		inc	hl
-;		ld	a,(hl)
-;		cp	a,#34      ;bjp was >data_1234
-;		jr	z,ldir_0
-;		inc_error_cnt
-;ldir_0:		ld	hl,var1
-;		ld	de,t_var1
-;		ld	bc,5
-;		ldir
-;		jp	po,ldir_1
-;		inc_error_cnt
-;ldir_1:		ld	hl,t_var1
-;		ld	a,(hl)
-;		cp	a,data_ff
-;		jr	z,ldir_2
-;		inc_error_cnt
-;ldir_2:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_55
-;		jr	z,ldir_3
-;		inc_error_cnt
-;ldir_3:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_80
-;		jr	z,ldir_4
-;		inc_error_cnt
-;ldir_4:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_aa
-;		jr	z,ldir_5
-;		inc_error_cnt
-;ldir_5:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_7f
-;		jr	z,ldd_0
-;		inc_error_cnt
-;ldd_0:		ld	hl,t_var5
-;		ld	a,#12      ;bjp was >data_1234
-;		ld	(hl),a
-;		dec	hl
-;		ld	a,#34      ;bjp was >data_1234
-;		ld	(hl),a
-;		inc	hl
-;		ld	bc,2
-;		ld	de,t_var3
-;		ldd
-;		jp	pe,ldd_1
-;		inc_error_cnt
-;ldd_1:		ldd
-;		jp	po,ldd_2
-;		inc_error_cnt
-;ldd_2:		ld	hl,t_var3
-;		ld	a,(hl)
-;		cp	a,#12      ;bjp was >data_1234
-;		jr	z,ldd_3
-;		inc_error_cnt
-;ldd_3:		dec	hl
-;		ld	a,(hl)
-;		cp	a,#34      ;bjp was >data_1234
-;		jr	z,lddr_0
-;		inc_error_cnt
-;lddr_0:		ld	bc,5
-;		ld	hl,var5
-;		ld	de,t_var5
-;		lddr
-;		jp	po,lddr_1
-;		inc_error_cnt
-;lddr_1:		ld	hl,t_var1
-;		ld	a,(hl)
-;		cp	a,data_ff
-;		jr	z,lddr_2
-;		inc_error_cnt
-;lddr_2:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_55
-;		jr	z,lddr_3
-;		inc_error_cnt
-;lddr_3:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_80
-;		jr	z,lddr_4
-;		inc_error_cnt
-;lddr_4:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_aa
-;		jr	z,lddr_5
-;		inc_error_cnt
-;lddr_5:		inc	hl
-;		ld	a,(hl)
-;		cp	a,data_7f
-;		jr	z,cpi_0
-;		inc_error_cnt
-;cpi_0:		ld	hl,t_var1
-;		ld	bc,5
-;		ld	a,data_7f
-;		cpi
-;		jp	pe,cpi_1
-;		inc_error_cnt
-;cpi_1:		jp	m,cpi_2
-;		inc_error_cnt
-;cpi_2:		jr	nz,cpi_3
-;		inc_error_cnt
-;cpi_3:		cpi
-;		jp	pe,cpi_4
-;		inc_error_cnt
-;cpi_4:		jp	p,cpi_5
-;		inc_error_cnt
-;cpi_5:		jr	nz,cpi_6
-;		inc_error_cnt
-;cpi_6:		cpi
-;		jp	pe,cpi_7
-;		inc_error_cnt
-;cpi_7:		jp	m,cpi_8
-;		inc_error_cnt
-;cpi_8:		jr	nz,cpi_9
-;		inc_error_cnt
-;cpi_9:		cpi
-;		jp	pe,cpi_10
-;		inc_error_cnt
-;cpi_10:		jp	m,cpi_11
-;		inc_error_cnt
-;cpi_11:		jr	nz,cpi_12
-;		inc_error_cnt
-;cpi_12:		cpi
-;		jp	po,cpi_13
-;		inc_error_cnt
-;cpi_13:		jp	p,cpi_14
-;		inc_error_cnt
-;cpi_14:		jr	z,cpir_0
-;		inc_error_cnt
-;cpir_0:		ld	a,data_aa
-;		ld	hl,var1
-;		ld	bc,5
-;		cpir
-;		jr	z,cpir_1
-;		inc_error_cnt
-;cpir_1:		jp	pe,cpir_2
-;		inc_error_cnt
-;cpir_2:		ld	a,b
-;		cp	a,0
-;		jr	z,cpir_3
-;		inc_error_cnt
-;cpir_3:		ld	a,c
-;		cp	a,1
-;		jr	z,cpir_4
-;		inc_error_cnt
-;cpir_4:		ld	a,data_7f
-;		ld	hl,var1
-;		ld	bc,5
-;		cpir
-;		jp	po,cpir_5
-;		inc_error_cnt
-;cpir_5:		jr	z,cpir_6
-;		inc_error_cnt
-;cpir_6:		ld	a,#34      ;bjp was >data_1234
-;		ld	hl,var1
-;		ld	bc,5
-;		cpir
-;		jp	po,cpir_7
-;		inc_error_cnt
-;cpir_7:		jr	nz,cpir_8
-;		inc_error_cnt
-;cpir_8:		jp	m,cpir_9
-;		inc_error_cnt
-;cpir_9:		ld	a,data_aa
-;		ld	hl,var1
-;		ld	bc,3
-;		cpir
-;		jp	po,cpir_10
-;		inc_error_cnt
-;cpir_10:	jp	p,cpir_11
-;		inc_error_cnt
-;cpir_11:	jr	nz,cpd_0
-;		inc_error_cnt
-;cpd_0:		ld	a,data_ff
-;		ld	hl,var5
-;		ld	bc,5
-;		cpd
-;		jp	m,cpd_1
-;		inc_error_cnt
-;cpd_1:		jp	pe,cpd_2
-;		inc_error_cnt
-;cpd_2:		jr	nz,cpd_3
-;		inc_error_cnt
-;cpd_3:		cpd
-;		jp	p,cpd_4
-;		inc_error_cnt
-;cpd_4:		jp	pe,cpd_5
-;		inc_error_cnt
-;cpd_5:		jr	nz,cpd_6
-;		inc_error_cnt
-;cpd_6:		cpd
-;		jp	p,cpd_7
-;		inc_error_cnt
-;cpd_7:		jp	pe,cpd_8
-;		inc_error_cnt
-;cpd_8:		jr	nz,cpd_9
-;		inc_error_cnt
-;cpd_9:		cpd
-;		jp	m,cpd_10
-;		inc_error_cnt
-;cpd_10:		jp	pe,cpd_11
-;		inc_error_cnt
-;cpd_11:		jr	nz,cpd_12
-;		inc_error_cnt
-;cpd_12:		cpd
-;		jp	p,cpd_13
-;		inc_error_cnt
-;cpd_13:		jp	po,cpd_14
-;		inc_error_cnt
-;cpd_14:		jr	z,cpdr_0
-;		inc_error_cnt
-;cpdr_0:		ld	a,data_80
-;		ld	hl,var5
-;		ld	bc,5
-;		cpdr
-;		jp	pe,cpdr_1
-;		inc_error_cnt
-;cpdr_1:		jp	p,cpdr_2
-;		inc_error_cnt
-;cpdr_2:		jr	z,cpdr_3
-;		inc_error_cnt
-;cpdr_3:		ld	a,b
-;		cp	a,0
-;		jr	z,cpdr_4
-;		inc_error_cnt
-;cpdr_4:		ld	a,c
-;		cp	a,2
-;		jr	z,cpdr_5
-;		inc_error_cnt
-;cpdr_5:		ld	a,#34      ;bjp was >data_1234
-;		ld	hl,var5
-;		ld	bc,5
-;		cpdr
-;		jp	po,cpdr_6
-;		inc_error_cnt
-;cpdr_6:		jr	nz,cpdr_7
-;		inc_error_cnt
-;cpdr_7:		jp	p,cpdr_8
-;		inc_error_cnt
-;cpdr_8:		ld	a,#34      ;bjp was >data_1234
-;		ld	hl,var5
-;		ld	bc,3
-;		cpdr
-;		jp	po,cpdr_9
-;		inc_error_cnt
-;cpdr_9:		jr	nz,cpdr_10
-;		inc_error_cnt
-;cpdr_10:	jp	m,out_0
-;		inc_error_cnt
-;;
-;;the file portfe.xxx must be examined to see if the proper output is generated
-;;
-;out_0:		ld	a,#30
-;		out	(out_port),a
-;		ld	c,out_port
-;		ld	a,#31
-;		out	(c),a
-;		ld	b,#32
-;		out	(c),b
-;		ld	d,#33
-;		out	(c),d
-;		ld	e,#34
-;		out	(c),e
-;		ld	h,#35
-;		out	(c),h
-;		ld	l,#36
-;		out	(c),l
-;		out	(c),c			;output value divider
-;outi_0:		ld	a,#31			;set up output values
-;		ld	b,5
-;		ld	hl,t_var1
-;outi_1:		ld	(hl),a
-;		inc	a
-;		inc	hl
-;		djnz	outi_1
-;outi_2:		ld	c,out_port
-;		ld	b,5
-;		ld	hl,t_var1
-;outi_3:		outi
-;		jr	nz,outi_3
-;otir_0:		out	(c),c			;output value divider
-;		ld	hl,t_var1
-;		ld	b,5
-;		otir
-;		jr	z,outd_0
-;		inc_error_cnt
-;outd_0:		out	(c),c
-;		ld	hl,t_var5
-;		ld	b,5
-;outd_1:		outd
-;		jr	nz,outd_1
-;otdr_0:		out	(c),c
-;		ld	b,5
-;		ld	hl,t_var5
-;		otdr
-;		jr	z,otdr_1
-;		inc_error_cnt
-;otdr_1:		out	(c),c
-;		ld	a,#0d
-;		out	(c),a
-;		ld	a,#0a
-;		out	(c),a
+add_110:	push	ix
+		pop	hl
+		ld	a,h
+		cp	a,#71		; >stack_end
+		jr	z,add_111
+		inc_error_cnt
+add_111:	ld	a,l
+		cp	a,#80		; <stack_end
+		jr	z,add_112
+		inc_error_cnt
+add_112:	ld	ix,data_7fff
+		ld	bc,data_aa55
+		add	ix,bc
+		jr	c,add_113
+		inc_error_cnt
+add_113:	add	ix,bc
+		jr	nc,add_114
+		inc_error_cnt
+add_114:	push	ix
+		pop	hl
+		ld	a,h
+		cp	a,#d4
+		jr	z,add_115
+		inc_error_cnt
+add_115:	ld	a,l
+		cp	a,#a9
+		jr	z,add_116
+		inc_error_cnt
+add_116:	ld	ix,data_1234
+		ld	de,data_1234
+		add	ix,de
+		push	ix
+		pop	hl
+		ld	a,h
+		cp	a,#24		;>(data_1234+data_1234)
+		jr	z,add_117
+		inc_error_cnt
+add_117:	ld	a,l
+		cp	a,#68		;<(data_1234+data_1234)
+		jr	z,add_118
+		inc_error_cnt
+add_118:	ld	ix,data_1234
+		add	ix,ix
+		push	ix
+		pop	bc
+		ld	a,b
+		cp	a,#24		;>(data_1234+data_1234)
+		jr	z,add_119
+		inc_error_cnt
+add_119:	ld	a,c
+		cp	a,#68		;<(data_1234+data_1234)
+		jr	z,add_120
+		inc_error_cnt
+add_120:	ld	sp,stack_end
+		ld	iy,0
+		add	iy,sp
+		jr	nc,add_121
+		inc_error_cnt
+add_121:	push	iy
+		pop	hl
+		ld	a,h
+		cp	a,#71		;>stack_end
+		jr	z,add_122
+		inc_error_cnt
+add_122:	ld	a,l
+		cp	a,#80		;<stack_end
+		jr	z,add_123
+		inc_error_cnt
+add_123:	ld	iy,data_7fff
+		ld	bc,data_aa55
+		add	iy,bc
+		jr	c,add_124
+		inc_error_cnt
+add_124:	add	iy,bc
+		jr	nc,add_125
+		inc_error_cnt
+add_125:	push	iy
+		pop	hl
+		ld	a,h
+		cp	a,#d4
+		jr	z,add_126
+		inc_error_cnt
+add_126:	ld	a,l
+		cp	a,#a9
+		jr	z,add_127
+		inc_error_cnt
+add_127:	ld	iy,data_1234
+		ld	de,data_1234
+		add	iy,de
+		push	iy
+		pop	hl
+		ld	a,h
+		cp	a,#24		;>(data_1234+data_1234)
+		jr	z,add_128
+		inc_error_cnt
+add_128:	ld	a,l
+		cp	a,#68		;<(data_1234+data_1234)
+		jr	z,add_129
+		inc_error_cnt
+add_129:	ld	iy,data_1234
+		add	iy,iy
+		push	iy
+		pop	bc
+		ld	a,b
+		cp	a,#24		;>(data_1234+data_1234)
+		jr	z,add_130
+		inc_error_cnt
+add_130:	ld	a,c
+		cp	a,#68		;<(data_1234+data_1234)
+		jr	z,inc_54
+		inc_error_cnt
+inc_54:		ld	bc,data_1234
+		inc	bc
+		ld	a,b
+		cp	a,#12      ;bjp was >data_1234
+		jr	z,inc_55
+		inc_error_cnt
+inc_55:		ld	a,c
+		cp	a,#34+1      ;bjp was >data_1234+1
+		jr	z,inc_56
+		inc_error_cnt
+inc_56:		ld	de,data_55aa
+		inc	de
+		ld	a,d
+		cp	a,#55		;>data_55aa
+		jr	z,inc_57
+		inc_error_cnt
+inc_57:		ld	a,e
+		cp	a,#ab		;<data_55aa+1
+		jr	z,inc_58
+		inc_error_cnt
+inc_58:		ld	hl,data_7fff
+		inc	hl
+		ld	a,h
+		cp	a,#80		;>data_7fff+1
+		jr	z,inc_59
+		inc_error_cnt
+inc_59:		ld	a,l
+		cp	a,#00		;<data_7fff+1
+		jr	z,inc_60
+		inc_error_cnt
+inc_60:		ld	hl,0
+		inc	sp
+		add	hl,sp
+		ld	sp,stack_end
+		ld	a,h
+		cp	a,#71		;>stack_end+1
+		jr	z,inc_61
+		inc_error_cnt
+inc_61:		ld	a,l
+		cp	a,#81		;<stack_end+1
+		jr	z,inc_62
+		inc_error_cnt
+inc_62:		ld	ix,data_8000
+		inc	ix
+		push	ix
+		pop	de
+		ld	a,d
+		cp	a,#80		;>data_8000
+		jr	z,inc_63
+		inc_error_cnt
+inc_63:		ld	a,e
+		cp	a,#01		;<data_8000+1
+		jr	z,inc_64
+		inc_error_cnt
+inc_64:		ld	iy,data_7fff
+		inc 	iy
+		push	iy
+		pop	bc
+		ld	a,b
+		cp	a,#80		;>data_7fff+1
+		jr	z,inc_65
+		inc_error_cnt
+inc_65:		ld	a,c
+		cp	a,#00		;<data_7fff+1
+		jr	z,dec_46
+		inc_error_cnt
+dec_46:		ld	bc,data_1234
+		dec	bc
+		ld	a,b
+		cp	a,#12      ;bjp was >data_1234
+		jr	z,dec_47
+		inc_error_cnt
+dec_47:		ld	a,c
+		cp	a,#34-1      ;bjp was >data_1234-1
+		jr	z,dec_48
+		inc_error_cnt
+dec_48:		ld	de,data_8000
+		dec	de
+		ld	a,d
+		cp	a,#7f		;>data_7fff
+		jr	z,dec_49
+		inc_error_cnt
+dec_49:		ld	a,e
+		cp	a,#ff		;<data_7fff
+		jr	z,dec_50
+		inc_error_cnt
+dec_50:		ld	hl,data_aa55
+		dec	hl
+		ld	a,h
+		cp	a,#aa		;>data_aa55
+		jr	z,dec_51
+		inc_error_cnt
+dec_51:		ld	a,l
+		cp	a,#54		;<data_aa55-1
+		jr	z,dec_52
+		inc_error_cnt
+dec_52:		ld	hl,0
+		dec	sp
+		add	hl,sp
+		ld	a,h
+		cp	a,#71		;>stack_end-1
+		jr	z,dec_53
+		inc_error_cnt
+dec_53:		ld	a,l
+		cp	a,#7f		;<stack_end-1
+		jr	z,dec_54
+		inc_error_cnt
+dec_54:		ld	sp,stack_end
+		ld	ix,data_ffff
+		dec	ix
+		push	ix
+		pop	bc
+		ld	a,b
+		cp	a,#ff		;>data_ffff
+		jr	z,dec_55
+		inc_error_cnt
+dec_55:		ld	a,c
+		cp	a,#fe		;<data_ffff-1
+		jr	z,dec_56
+		inc_error_cnt
+dec_56:		ld	iy,data_aa55
+		dec	iy
+		push	iy
+		pop	de
+		ld	a,d
+		cp	a,#aa		;>data_aa55
+		jr	z,dec_57
+		inc_error_cnt
+dec_57:		ld	a,e
+		cp	a,#54		;<data_aa55-1
+		jr	z,rlca_0
+		inc_error_cnt
+rlca_0:		ld	a,data_80
+		rlca
+		jr	c,rlca_1
+		inc_error_cnt
+rlca_1:		rlca
+		jr	nc,rlca_2
+		inc_error_cnt
+rlca_2:		cp	a,2
+		jr	z,rlca_3
+		inc_error_cnt
+rlca_3:		ld	a,data_55
+		rlca
+		cp	a,data_aa
+		jr	z,rla_0
+		inc_error_cnt
+rla_0:		scf
+		ccf
+		ld	a,data_80
+		rla
+		jr	c,rla_1
+		inc_error_cnt
+rla_1:		rla
+		jr	nc,rla_2
+		inc_error_cnt
+rla_2:		cp	a,1
+		jr	z,rla_3
+		inc_error_cnt
+rla_3:		ld	a,data_7f
+		rla
+		cp	a,data_ff-1
+		jr	z,rrca_0
+		inc_error_cnt
+rrca_0:		scf
+		ccf
+		ld	a,1
+		rrca
+		jr	c,rrca_1
+		inc_error_cnt
+rrca_1:		rrca
+		jr	nc,rrca_2
+		inc_error_cnt
+rrca_2:		cp	a,data_7f-#3f
+		jr	z,rrca_3
+		inc_error_cnt
+rrca_3:		ld	a,data_aa
+		rrca
+		cp	a,data_55
+		jr	z,rra_0
+		inc_error_cnt
+rra_0:		scf
+		ccf
+		ld	a,1
+		rra
+		jr	c,rra_1
+		inc_error_cnt
+rra_1:		rra
+		jr	nc,rra_2
+		inc_error_cnt
+rra_2:		cp	a,data_80
+		jr	z,rra_3
+		inc_error_cnt
+rra_3:		ld	a,data_aa
+		rra
+		cp	a,data_55
+		jr	z,rlc_0
+		inc_error_cnt
+rlc_0:		ld	a,data_80
+		rlc	a
+		jr	c,rlc_1
+		inc_error_cnt
+rlc_1:		jp	p,rlc_2
+		inc_error_cnt
+rlc_2:		jr	nz,rlc_3
+		inc_error_cnt
+rlc_3:		jp	po,rlc_4
+		inc_error_cnt
+rlc_4:		rlc	a
+		jr	nc,rlc_5
+		inc_error_cnt
+rlc_5:		rlc	a
+		rlc	a
+		rlc	a
+		rlc	a
+		rlc	a
+		rlc	a
+		jp	m,rlc_6
+		inc_error_cnt
+rlc_6:		ld	a,data_55
+		rlc	a
+		jp	m,rlc_7
+		inc_error_cnt
+rlc_7:		jp	pe,rlc_8
+		inc_error_cnt
+rlc_8:		cp	a,data_aa
+		jr	z,rlc_9
+		inc_error_cnt
+rlc_9:		ld	a,0
+		rlc	a
+		jr	z,rlc_10
+		inc_error_cnt
+rlc_10:		ld	b,data_7f
+		rlc	b
+		ld	a,b
+		cp	a,data_ff-1
+		jr	z,rlc_11
+		inc_error_cnt
+rlc_11:		ld	c,data_aa
+		rlc	c
+		jr	c,rlc_12
+		inc_error_cnt
+rlc_12:		ld	a,c
+		cp	a,data_55
+		jr	z,rlc_13
+		inc_error_cnt
+rlc_13:		ld	d,data_80
+		rlc	d
+		jr	c,rlc_14
+		inc_error_cnt
+rlc_14:		ld	a,d
+		cp	a,1
+		jr	z,rlc_15
+		inc_error_cnt
+rlc_15:		ld	e,data_ff
+		rlc	e
+		jr	c,rlc_16
+		inc_error_cnt
+rlc_16:		ld	a,e
+		cp	a,data_ff
+		jr	z,rlc_17
+		inc_error_cnt
+rlc_17:		ld	h,data_55
+		rlc	h
+		jp	m,rlc_18
+		inc_error_cnt
+rlc_18:		ld	a,h
+		cp	a,data_aa
+		jr	z,rlc_19
+		inc_error_cnt
+rlc_19:		ld	l,data_80
+		rlc	l
+		jp	p,rlc_20
+		inc_error_cnt
+rlc_20:		ld	a,l
+		cp	a,1
+		jr	z,rlc_21
+		inc_error_cnt
+rlc_21:		ld	hl,t_var1
+		ld	a,data_55
+		ld	(hl),a
+		rlc	(hl)
+		jp	m,rlc_22
+		inc_error_cnt
+rlc_22:		jp	pe,rlc_23
+		inc_error_cnt
+rlc_23:		jr	nc,rlc_24
+		inc_error_cnt
+rlc_24:		jr	nz,rlc_25
+		inc_error_cnt
+rlc_25:		rlc	(hl)
+		jp	p,rlc_26
+		inc_error_cnt
+rlc_26:		jr	c,rlc_27
+		inc_error_cnt
+rlc_27:		ld	a,(hl)
+		cp	a,data_55
+		jr	z,rlc_28
+		inc_error_cnt
+rlc_28:		ld	a,data_7f
+		ld	(hl),a
+		rlc	(hl)
+		jp	po,rlc_29
+		inc_error_cnt
+rlc_29:		ld	a,(hl)
+		cp	a,data_ff-1
+		jr	z,rlc_30
+		inc_error_cnt
+rlc_30:		ld	a,0
+		ld	(hl),a
+		rlc	(hl)
+		jr	z,rlc_31
+		inc_error_cnt
+rlc_31:		ld	ix,t_var3
+		ld	a,data_55
+		ld	(ix-2),a
+		rlc	(ix-2)
+		jp	m,rlc_32
+		inc_error_cnt
+rlc_32:		jp	pe,rlc_33
+		inc_error_cnt
+rlc_33:		jr	nz,rlc_34
+		inc_error_cnt
+rlc_34:		jr	nc,rlc_35
+		inc_error_cnt
+rlc_35:		rlc	(ix-2)
+		jp	p,rlc_36
+		inc_error_cnt
+rlc_36:		jr	c,rlc_37
+		inc_error_cnt
+rlc_37:		ld	a,(ix-2)
+		cp	a,data_55
+		jr	z,rlc_38
+		inc_error_cnt
+rlc_38:		ld	a,data_7f
+		ld	(ix+2),a
+		rlc	(ix+2)
+		jp	po,rlc_39
+		inc_error_cnt
+rlc_39:		ld	a,(ix+2)
+		cp	a,data_ff-1
+		jr	z,rlc_40
+		inc_error_cnt
+rlc_40:		ld	a,0
+		ld	(ix-1),a
+		rlc	(ix-1)
+		jr	z,rlc_41
+		inc_error_cnt
+rlc_41:		ld	iy,t_var3
+		ld	a,data_55
+		ld	(iy+2),a
+		rlc	(iy+2)
+		jp	m,rlc_42
+		inc_error_cnt
+rlc_42:		jp	pe,rlc_43
+		inc_error_cnt
+rlc_43:		jr	nc,rlc_44
+		inc_error_cnt
+rlc_44:		jr	nz,rlc_45
+		inc_error_cnt
+rlc_45:		rlc	(iy+2)
+		jp	p,rlc_46
+		inc_error_cnt
+rlc_46:		jr	c,rlc_47
+		inc_error_cnt
+rlc_47:		ld	a,(iy+2)
+		cp	a,data_55
+		jr	z,rlc_48
+		inc_error_cnt
+rlc_48:		ld	a,data_7f
+		ld	(iy-2),a
+		rlc	(iy-2)
+		jp	po,rlc_49
+		inc_error_cnt
+rlc_49:		ld	a,(iy-2)
+		cp	a,data_ff-1
+		jr	z,rlc_50
+		inc_error_cnt
+rlc_50:		ld	a,0
+		ld	(iy+1),a
+		rlc	(iy+1)
+		jr	z,rl_0
+		inc_error_cnt
+rl_0:		scf
+		ccf
+		ld	a,data_55
+		rl	a
+		jp	m,rl_1
+		inc_error_cnt
+rl_1:		jp	pe,rl_2
+		inc_error_cnt
+rl_2:		jr	nc,rl_3
+		inc_error_cnt
+rl_3:		jr	nz,rl_4
+		inc_error_cnt
+rl_4:		rl	a
+		jp	p,rl_5
+		inc_error_cnt
+rl_5:		jp	po,rl_6
+		inc_error_cnt
+rl_6:		jr	c,rl_7
+		inc_error_cnt
+rl_7:		rl	a
+		cp	a,data_aa-1
+		jr	z,rl_8
+		inc_error_cnt
+rl_8:		ld	a,0
+		rl	a
+		jr	z,rl_9
+		inc_error_cnt
+rl_9:		ld	b,data_aa
+		ld	c,data_7f
+		rl	b
+		jr	c,rl_10
+		inc_error_cnt
+rl_10:		rl	c
+		jr	nc,rl_11
+		inc_error_cnt
+rl_11:		ld	a,b
+		cp	a,data_55-1
+		jr	z,rl_12
+		inc_error_cnt
+rl_12:		ld	a,c
+		cp	a,data_ff
+		jr	z,rl_13
+		inc_error_cnt
+rl_13:		ld	d,data_ff
+		ld	e,data_80
+		rl	e
+		jr	c,rl_14
+		inc_error_cnt
+rl_14:		rl	d
+		jr	c,rl_15
+		inc_error_cnt
+rl_15:		ld	a,d
+		cp	a,data_ff
+		jr	z,rl_16
+		inc_error_cnt
+rl_16:		ld	a,e
+		cp	a,0
+		jr	z,rl_17
+		inc_error_cnt
+rl_17:		ld	h,data_7f
+		ld	l,data_55
+		rl	h
+		jp	m,rl_18
+		inc_error_cnt
+rl_18:		rl	l
+		jp	m,rl_19
+		inc_error_cnt
+rl_19:		ld	a,h
+		cp	a,data_ff-1
+		jr	z,rl_20
+		inc_error_cnt
+rl_20:		ld	a,l
+		cp	a,data_aa
+		jr	z,rl_21
+		inc_error_cnt
+rl_21:		ld	hl,t_var5
+		ld	a,data_55
+		ld	(hl),a
+		rl	(hl)
+		jp	m,rl_22
+		inc_error_cnt
+rl_22:		jp	pe,rl_23
+		inc_error_cnt
+rl_23:		jr	nc,rl_24
+		inc_error_cnt
+rl_24:		jr	nz,rl_25
+		inc_error_cnt
+rl_25:		rl	(hl)
+		jp	p,rl_26
+		inc_error_cnt
+rl_26:		jp	po,rl_27
+		inc_error_cnt
+rl_27:		jr	c,rl_28
+		inc_error_cnt
+rl_28:		ld	a,(hl)
+		cp	a,data_55-1
+		jr	z,rl_29
+		inc_error_cnt
+rl_29:		ld	a,0
+		ld	(hl),a
+		rl	(hl)
+		jr	z,rl_30
+		inc_error_cnt
+rl_30:		ld	ix,t_var3
+		ld	a,data_55
+		ld	(ix-2),a
+		rl	(ix-2)
+		jp	m,rl_31
+		inc_error_cnt
+rl_31:		jp	pe,rl_32
+		inc_error_cnt
+rl_32:		jr	nc,rl_33
+		inc_error_cnt
+rl_33:		jr	nz,rl_34
+		inc_error_cnt
+rl_34:		rl	(ix-2)
+		jp	p,rl_35
+		inc_error_cnt
+rl_35:		jp	po,rl_36
+		inc_error_cnt
+rl_36:		jr	c,rl_37
+		inc_error_cnt
+rl_37:		ld	a,(ix-2)
+		cp	a,data_55-1
+		jr	z,rl_38
+		inc_error_cnt
+rl_38:		ld	a,0
+		ld	(ix+2),a
+		rl	(ix+2)
+		jr	z,rl_39
+rl_39:		ld	iy,t_var3
+		ld	a,data_55
+		ld	(iy-1),a
+		rl	(iy-1)
+		jp	m,rl_40
+		inc_error_cnt
+rl_40:		jp	pe,rl_41
+		inc_error_cnt
+rl_41:		jr	nc,rl_42
+		inc_error_cnt
+rl_42:		jr	nz,rl_43
+		inc_error_cnt
+rl_43:		rl	(iy-1)
+		jp	p,rl_44
+		inc_error_cnt
+rl_44:		jp	po,rl_45
+		inc_error_cnt
+rl_45:		jr	c,rl_46
+		inc_error_cnt
+rl_46:		ld	a,(iy-1)
+		cp	a,data_55-1
+		jr	z,rl_47
+		inc_error_cnt
+rl_47:		ld	a,0
+		ld	(iy+1),a
+		rl	(iy+1)
+		jr	z,rrc_0
+		inc_error_cnt
+rrc_0:		ld	a,data_aa
+		rrc	a
+		jp	p,rrc_1
+		inc_error_cnt
+rrc_1:		jp	pe,rrc_2
+		inc_error_cnt
+rrc_2:		jr	nz,rrc_3
+		inc_error_cnt
+rrc_3:		jr	nc,rrc_4
+		inc_error_cnt
+rrc_4:		rrc	a
+		jp	m,rrc_5
+		inc_error_cnt
+rrc_5:		jr	c,rrc_6
+		inc_error_cnt
+rrc_6:		cp	a,data_aa
+		jr	z,rrc_7
+		inc_error_cnt
+rrc_7:		ld	a,1
+		rrc	a
+		jr	c,rrc_8
+		inc_error_cnt
+rrc_8:		cp	a,data_80
+		jr	z,rrc_9
+		inc_error_cnt
+rrc_9:		ld	a,data_7f
+		rrc	a
+		jp	po,rrc_10
+		inc_error_cnt
+rrc_10:		cp	a,#bf
+		jr	z,rrc_11
+		inc_error_cnt
+rrc_11:		ld	b,data_80
+		ld	c,data_55
+		rrc	b
+		jr	nc,rrc_12
+		inc_error_cnt
+rrc_12:		rrc	c
+		jr	c,rrc_13
+		inc_error_cnt
+rrc_13:		ld	a,b
+		cp	a,#40
+		jr	z,rrc_14
+		inc_error_cnt
+rrc_14:		ld	a,c
+		cp	a,data_aa
+		jr	z,rrc_15
+		inc_error_cnt
+rrc_15:		ld	d,data_aa
+		ld	e,1
+		rrc	d
+		jp	p,rrc_16
+		inc_error_cnt
+rrc_16:		rrc	e
+		jp	m,rrc_17
+		inc_error_cnt
+rrc_17:		ld	a,d
+		cp	a,data_55
+		jr	z,rrc_18
+		inc_error_cnt
+rrc_18:		ld	a,e
+		cp	a,data_80
+		jr	z,rrc_19
+		inc_error_cnt
+rrc_19:		ld	h,data_55
+		ld	l,data_ff
+		rrc	h
+		jr	c,rrc_20
+		inc_error_cnt
+rrc_20:		rrc	l
+		jr	c,rrc_21
+		inc_error_cnt
+rrc_21:		ld	a,h
+		cp	a,data_aa
+		jr	z,rrc_22
+		inc_error_cnt
+rrc_22:		ld	a,l
+		cp	a,data_ff
+		jr	z,rrc_23
+		inc_error_cnt
+rrc_23:		ld	hl,t_var4
+		ld	(hl),data_aa
+		rrc	 (hl)
+		jp	p,rrc_24
+		inc_error_cnt
+rrc_24:		jp	pe,rrc_25
+		inc_error_cnt
+rrc_25:		jr	nz,rrc_26
+		inc_error_cnt
+rrc_26:		jr	nc,rrc_27
+		inc_error_cnt
+rrc_27:		rrc	(hl)
+		jp	m,rrc_28
+		inc_error_cnt
+rrc_28:		jr	c,rrc_29
+		inc_error_cnt
+rrc_29:		ld	a,(hl)
+		cp	a,data_aa
+		jr	z,rrc_30
+		inc_error_cnt
+rrc_30:		ld	(hl),data_7f
+		rrc	(hl)
+		jp	po,rrc_31
+		inc_error_cnt
+rrc_31:		ld	a,(hl)
+		cp	a,#bf
+		jr	z,rrc_32
+		inc_error_cnt
+rrc_32:		ld	(hl),0
+		rrc	(hl)
+		jr	z,rrc_33
+		inc_error_cnt
+rrc_33:		ld	ix,t_var3
+		ld	a,data_aa
+		ld	(ix+2),a
+		rrc	(ix+2)
+		jp	p,rrc_34
+		inc_error_cnt
+rrc_34:		jp	pe,rrc_35
+		inc_error_cnt
+rrc_35:		jr	nc,rrc_36
+		inc_error_cnt
+rrc_36:		jr	nz,rrc_37
+		inc_error_cnt
+rrc_37:		rrc	(ix+2)
+		jp	m,rrc_38
+		inc_error_cnt
+rrc_38:		jr	c,rrc_39
+		inc_error_cnt
+rrc_39:		ld	a,(ix+2)
+		cp	a,data_aa
+		jr	z,rrc_40
+		inc_error_cnt
+rrc_40:		ld	a,1
+		ld	(ix-2),a
+		rrc	(ix-2)
+		jp	po,rrc_41
+		inc_error_cnt
+rrc_41:		ld	a,(ix-2)
+		cp	a,data_80
+		jr	z,rrc_42
+		inc_error_cnt
+rrc_42:		ld	a,0
+		ld	(ix+1),a
+		rrc	(ix+1)
+		jr	z,rrc_43
+		inc_error_cnt
+rrc_43:		ld	iy,t_var3
+		ld	a,data_aa
+		ld	(iy+2),a
+		rrc	(iy+2)
+		jp	p,rrc_44
+		inc_error_cnt
+rrc_44:		jp	pe,rrc_45
+		inc_error_cnt
+rrc_45:		jr	nc,rrc_46
+		inc_error_cnt
+rrc_46:		jr	nz,rrc_47
+		inc_error_cnt
+rrc_47:		rrc	(iy+2)
+		jp	m,rrc_48
+		inc_error_cnt
+rrc_48:		jr	c,rrc_49
+		inc_error_cnt
+rrc_49:		ld	a,(iy+2)
+		cp	a,data_aa
+		jr	z,rrc_50
+		inc_error_cnt
+rrc_50:		ld	a,1
+		ld	(iy-2),a
+		rrc	(iy-2)
+		jp	po,rrc_51
+		inc_error_cnt
+rrc_51:		ld	a,(iy-2)
+		cp	a,data_80
+		jr	z,rrc_52
+		inc_error_cnt
+rrc_52:		ld	a,0
+		ld	(iy+1),a
+		rrc	(iy+1)
+		jr	z,rr_0
+		inc_error_cnt
+rr_0:		scf
+		ccf
+		ld	a,data_aa
+		rr	a
+		jp	p,rr_1
+		inc_error_cnt
+rr_1:		jp	pe,rr_2
+		inc_error_cnt
+rr_2:		jr	nc,rr_3
+		inc_error_cnt
+rr_3:		jr	nz,rr_4
+		inc_error_cnt
+rr_4:		rr	a
+		jr	c,rr_5
+		inc_error_cnt
+rr_5:		jp	po,rr_6
+		inc_error_cnt
+rr_6:		cp	a,#2a
+		jr	z,rr_7
+		inc_error_cnt
+rr_7:		scf
+		ld	a,0
+		rr	a
+		jp	m,rr_8
+		inc_error_cnt
+rr_8:		cp	a,data_80
+		jr	z,rr_9
+		inc_error_cnt
+rr_9:		ld	a,0
+		rr	a
+		jr	z,rr_10
+		inc_error_cnt
+rr_10:		ld	b,data_55
+		ld	c,data_aa
+		rr	b
+		jr	c,rr_11
+		inc_error_cnt
+rr_11:		rr	c
+		jr	nc,rr_12
+		inc_error_cnt
+rr_12:		ld	a,b
+		cp	a,#2a
+		jr	z,rr_13
+		inc_error_cnt
+rr_13:		ld	a,c
+		cp	a,#d5
+		jr	z,rr_14
+		inc_error_cnt
+rr_14:		ld	d,data_7f
+		ld	e,data_80
+		rr	d
+		jr	c,rr_15
+		inc_error_cnt
+rr_15:		rr	e
+		jr	nc,rr_16
+		inc_error_cnt
+rr_16:		ld	a,d
+		cp	a,#3f
+		jr	z,rr_17
+		inc_error_cnt
+rr_17:		ld	a,e
+		cp	a,#c0
+		jr	z,rr_18
+		inc_error_cnt
+rr_18:		ld	hl,t_var2
+		ld	(hl),data_55
+		rr	(hl)
+		jp	p,rr_19
+		inc_error_cnt
+rr_19:		jp	po,rr_20
+		inc_error_cnt
+rr_20:		jr	c,rr_21
+		inc_error_cnt
+rr_21:		jr	nz,rr_22
+		inc_error_cnt
+rr_22:		rr	(hl)
+		jp	m,rr_23
+		inc_error_cnt
+rr_23:		jp	pe,rr_24
+		inc_error_cnt
+rr_24:		jr	nc,rr_25
+		inc_error_cnt
+rr_25:		ld	a,(hl)
+		cp	a,#95
+		jr	z,rr_26
+		inc_error_cnt
+rr_26:		ld	(hl),0
+		rr	(hl)
+		jr	z,rr_27
+		inc_error_cnt
+rr_27:		ld	ix,t_var3
+		ld	a,data_55
+		ld	(ix-2),a
+		rr	(ix-2)
+		jp	p,rr_28
+		inc_error_cnt
+rr_28:		jp	po,rr_29
+		inc_error_cnt
+rr_29:		jr	c,rr_30
+		inc_error_cnt
+rr_30:		jr	nz,rr_31
+		inc_error_cnt
+rr_31:		rr	(ix-2)
+		jp	m,rr_32
+		inc_error_cnt
+rr_32:		jp	pe,rr_33
+		inc_error_cnt
+rr_33:		jr	nc,rr_34
+		inc_error_cnt
+rr_34:		ld	a,(ix-2)
+		cp	a,#95
+		jr	z,rr_35
+		inc_error_cnt
+rr_35:		ld	a,0
+		ld	(ix+2),a
+		rr	(ix+2)
+		jr	z,rr_36
+		inc_error_cnt
+rr_36:		ld	iy,t_var3
+		ld	a,data_55
+		ld	(iy+2),a
+		rr	(iy+2)
+		jp	p,rr_37
+		inc_error_cnt
+rr_37:		jp	po,rr_38
+		inc_error_cnt
+rr_38:		jr	c,rr_39
+		inc_error_cnt
+rr_39:		jr	nz,rr_40
+		inc_error_cnt
+rr_40:		rr	(iy+2)
+		jp	m,rr_41
+		inc_error_cnt
+rr_41:		jp	pe,rr_42
+		inc_error_cnt
+rr_42:		jr	nc,rr_43
+		inc_error_cnt
+rr_43:		ld	a,(iy+2)
+		cp	a,#95
+		jr	z,rr_44
+		inc_error_cnt
+rr_44:		ld	a,0
+		ld	(iy-1),a
+		rr	(iy-1)
+		jr	z,sla_0
+		inc_error_cnt
+sla_0:		ld	a,data_55
+		sla	a
+		jp	m,sla_1
+		inc_error_cnt
+sla_1:		jp	pe,sla_2
+		inc_error_cnt
+sla_2:		jr	nc,sla_3
+		inc_error_cnt
+sla_3:		jr	nz,sla_4
+		inc_error_cnt
+sla_4:		sla	a
+		jp	p,sla_5
+		inc_error_cnt
+sla_5:		jp	po,sla_6
+		inc_error_cnt
+sla_6:		jr	c,sla_7
+		inc_error_cnt
+sla_7:		cp	a,data_55-1
+		jr	z,sla_8
+		inc_error_cnt
+sla_8:		ld	a,0
+		sla	a
+		jr	z,sla_9
+		inc_error_cnt
+sla_9:		ld	b,data_80
+		ld	c,data_7f
+		sla	b
+		jr	c,sla_10
+		inc_error_cnt
+sla_10:		ld	a,b
+		cp	a,0
+		jr	z,sla_11
+		inc_error_cnt
+sla_11:		sla	c
+		jp	m,sla_12
+		inc_error_cnt
+sla_12:		ld	a,c
+		cp	a,data_ff-1
+		jr	z,sla_13
+		inc_error_cnt
+sla_13:		ld	d,data_aa
+		ld	e,data_55
+		sla	d
+		jr	c,sla_14
+		inc_error_cnt
+sla_14:		ld	a,d
+		cp	a,data_55-1
+		jr	z,sla_15
+		inc_error_cnt
+sla_15:		sla	e
+		jp	m,sla_16
+		inc_error_cnt
+sla_16:		ld	a,e
+		cp	a,data_aa
+		jr	z,sla_17
+		inc_error_cnt
+sla_17:		ld	h,#12      ;bjp was >data_1234
+		ld	l,#34      ;bjp was >data_1234
+		sla	h
+		jp	p,sla_18
+		inc_error_cnt
+sla_18:		ld	a,h
+		cp	a,#24
+		jr	z,sla_19
+		inc_error_cnt
+sla_19:		sla	l
+		jp	p,sla_20
+		inc_error_cnt
+sla_20:		ld	a,l
+		cp	a,#68
+		jr	z,sla_21
+		inc_error_cnt
+sla_21:		ld	hl,t_var3
+		ld	(hl),data_55
+		sla	(hl)
+		jp	m,sla_22
+		inc_error_cnt
+sla_22:		jp	pe,sla_23
+		inc_error_cnt
+sla_23:		jr	nc,sla_24
+		inc_error_cnt
+sla_24:		jr	nz,sla_25
+		inc_error_cnt
+sla_25:		sla	(hl)
+		jp	p,sla_26
+		inc_error_cnt
+sla_26:		jp	po,sla_27
+		inc_error_cnt
+sla_27:		jr	c,sla_28
+		inc_error_cnt
+sla_28:		ld	a,(hl)
+		cp	a,data_55-1
+		jr	z,sla_29
+		inc_error_cnt
+sla_29:		ld	(hl),0
+		sla	(hl)
+		jr	z,sla_30
+		inc_error_cnt
+sla_30:		ld	ix,t_var3
+		ld	a,data_55
+		ld	(ix-2),a
+		sla	(ix-2)
+		jp	m,sla_31
+		inc_error_cnt
+sla_31:		jp	pe,sla_32
+		inc_error_cnt
+sla_32:		jr	nc,sla_33
+		inc_error_cnt
+sla_33:		jr	nz,sla_34
+		inc_error_cnt
+sla_34:		sla	(ix-2)
+		jp	p,sla_35
+		inc_error_cnt
+sla_35:		jp	po,sla_36
+		inc_error_cnt
+sla_36:		jr	c,sla_37
+		inc_error_cnt
+sla_37:		ld	a,(ix-2)
+		cp	a,data_55-1
+		jr	z,sla_38
+		inc_error_cnt
+sla_38:		ld	a,data_80
+		ld	(ix+2),a
+		sla	(ix+2)
+		jr	z,sla_39
+		inc_error_cnt
+sla_39:		jr	c,sla_40
+		inc_error_cnt
+sla_40:		ld	iy,t_var3
+		ld	a,data_55
+		ld	(iy+2),a
+		sla	(iy+2)
+		jp	m,sla_41
+		inc_error_cnt
+sla_41:		jp	pe,sla_42
+		inc_error_cnt
+sla_42:		jr	nc,sla_43
+		inc_error_cnt
+sla_43:		jr	nz,sla_44
+		inc_error_cnt
+sla_44:		sla	(iy+2)
+		jp	p,sla_45
+		inc_error_cnt
+sla_45:		jp	po,sla_46
+		inc_error_cnt
+sla_46:		jr	c,sla_47
+		inc_error_cnt
+sla_47:		ld	a,(iy+2)
+		cp	a,data_55-1
+		jr	z,sla_48
+		inc_error_cnt
+sla_48:		ld	a,data_80
+		ld	(iy-2),a
+		sla	(iy-2)
+		jr	z,sla_49
+		inc_error_cnt
+sla_49:		jr	c,sra_0
+		inc_error_cnt
+sra_0:		ld	a,data_55
+		sra	a
+		jp	p,sra_1
+		inc_error_cnt
+sra_1:		jp	po,sra_2
+		inc_error_cnt
+sra_2:		jr	c,sra_3
+		inc_error_cnt
+sra_3:		jr	nz,sra_4
+		inc_error_cnt
+sra_4:		sra	a
+		jp	po,sra_5
+		inc_error_cnt
+sra_5:		jr	nc,sra_6
+		inc_error_cnt
+sra_6:		sra	a
+		jp	pe,sra_7
+		inc_error_cnt
+sra_7:		cp	a,#0a			;data_aa.and.#0f
+		jr	z,sra_8
+		inc_error_cnt
+sra_8:		ld	a,1
+		sra	a
+		jr	c,sra_9
+		inc_error_cnt
+sra_9:		jr	z,sra_10
+		inc_error_cnt
+sra_10:		ld	a,data_80
+		sra	a
+		jp	m,sra_11
+		inc_error_cnt
+sra_11:		cp	a,#c0
+		jr	z,sra_12
+		inc_error_cnt
+sra_12:		ld	b,data_7f
+		ld	c,data_aa
+		sra	b
+		jr	c,sra_13
+		inc_error_cnt
+sra_13:		ld	a,b
+		cp	a,#3f
+		jr	z,sra_14
+		inc_error_cnt
+sra_14:		sra	c
+		jr	nc,sra_15
+		inc_error_cnt
+sra_15:		ld	a,c
+		cp	a,#d5
+		jr	z,sra_16
+		inc_error_cnt
+sra_16:		ld	d,data_55
+		ld	e,data_ff
+		sra	d
+		jr	c,sra_17
+		inc_error_cnt
+sra_17:		ld	a,d
+		cp	a,#2a
+		jr	z,sra_18
+		inc_error_cnt
+sra_18:		sra	e
+		jp	m,sra_19
+		inc_error_cnt
+sra_19:		ld	a,e
+		cp	a,data_ff
+		jr	z,sra_20
+		inc_error_cnt
+sra_20:		ld	h,data_aa
+		ld	l,data_7f
+		sra	h
+		jp	m,sra_21
+		inc_error_cnt
+sra_21:		ld	a,h
+		cp	a,#d5
+		jr	z,sra_22
+		inc_error_cnt
+sra_22:		sra	l
+		jr	c,sra_23
+		inc_error_cnt
+sra_23:		ld	a,l
+		cp	a,#3f
+		jr	z,sra_24
+		inc_error_cnt
+sra_24:		ld	hl,t_var1
+		ld	(hl),data_55
+		sra	(hl)
+		jp	p,sra_25
+		inc_error_cnt
+sra_25:		jp	po,sra_26
+		inc_error_cnt
+sra_26:		jr	c,sra_27
+		inc_error_cnt
+sra_27:		jr	nz,sra_28
+		inc_error_cnt
+sra_28:		sra	(hl)
+		jr	nc,sra_29
+		inc_error_cnt
+sra_29:		sra	(hl)
+		jp	pe,sra_30
+		inc_error_cnt
+sra_30:		ld	a,(hl)
+		cp	a,#0a			;data_aa.and.#0f
+		jr	z,sra_31
+		inc_error_cnt
+sra_31:		ld	(hl),data_80
+		sra	(hl)
+		jp	m,sra_32
+		inc_error_cnt
+sra_32:		ld	a,(hl)
+		cp	a,#c0
+		jr	z,sra_33
+		inc_error_cnt
+sra_33:		ld	(hl),1
+		sra	(hl)
+		jr	c,sra_34
+		inc_error_cnt
+sra_34:		jr	z,sra_35
+		inc_error_cnt
+sra_35:		ld	ix,t_var3
+		ld	a,data_55
+		ld	(ix-2),a
+		sra	(ix-2)
+		jp	p,sra_36
+		inc_error_cnt
+sra_36:		jp	po,sra_37
+		inc_error_cnt
+sra_37:		jr	c,sra_38
+		inc_error_cnt
+sra_38:		jr	nz,sra_39
+		inc_error_cnt
+sra_39:		sra	(ix-2)
+		jr	nc,sra_40
+		inc_error_cnt
+sra_40:		sra	(ix-2)
+		jp	pe,sra_41
+		inc_error_cnt
+sra_41:		ld	a,(ix-2)
+		cp	a,#0a		;data_aa.and.#0f
+		jr	z,sra_42
+		inc_error_cnt
+sra_42:		ld	a,data_80
+		ld	(ix+2),a
+		sra	(ix+2)
+		jp	m,sra_43
+		inc_error_cnt
+sra_43:		ld	a,(ix+2)
+		cp	a,#c0
+		jr	z,sra_44
+		inc_error_cnt
+sra_44:		ld	a,1
+		ld	(ix-1),a
+		sra	(ix-1)
+		jr	c,sra_45
+		inc_error_cnt
+sra_45:		jr	z,sra_46
+		inc_error_cnt
+sra_46:		ld	iy,t_var3
+		ld	a,data_55
+		ld	(iy-2),a
+		sra	(iy-2)
+		jp	p,sra_47
+		inc_error_cnt
+sra_47:		jp	po,sra_48
+		inc_error_cnt
+sra_48:		jr	c,sra_49
+		inc_error_cnt
+sra_49:		jr	nz,sra_50
+		inc_error_cnt
+sra_50:		sra	(iy-2)
+		jr	nc,sra_51
+		inc_error_cnt
+sra_51:		sra	(iy-2)
+		jp	pe,sra_52
+		inc_error_cnt
+sra_52:		ld	a,(iy-2)
+		cp	a,#0a		;data_aa.and.#0f
+		jr	z,sra_53
+		inc_error_cnt
+sra_53:		ld	a,data_80
+		ld	(iy+2),a
+		sra	(iy+2)
+		jp	m,sra_54
+		inc_error_cnt
+sra_54:		ld	a,(iy+2)
+		cp	a,#c0
+		jr	z,sra_55
+		inc_error_cnt
+sra_55:		ld	a,1
+		ld	(iy-1),a
+		sra	(iy-1)
+		jr	c,sra_56
+		inc_error_cnt
+sra_56:		jr	z,srl_0
+		inc_error_cnt
+srl_0:		ld	a,data_55
+		srl	a
+		jr	c,srl_1
+		inc_error_cnt
+srl_1:		jp	po,srl_2
+		inc_error_cnt
+srl_2:		srl	a
+		jr	nc,srl_3
+		inc_error_cnt
+srl_3:		srl	a
+		jp	pe,srl_4
+		inc_error_cnt
+srl_4:		cp	a,#0a			;data_aa.and.#0f
+		jr	z,srl_5
+		inc_error_cnt
+srl_5:		ld	a,data_80
+		and	a
+		jp	m,srl_6
+		inc_error_cnt
+srl_6:		srl	a
+		jp	p,srl_7
+		inc_error_cnt
+srl_7:		ld	a,2
+		srl	a
+		jr	nz,srl_8
+		inc_error_cnt
+srl_8:		srl	a
+		jr	z,srl_9
+		inc_error_cnt
+srl_9:		jr	c,srl_10
+		inc_error_cnt
+srl_10:		ld	b,data_aa
+		srl	b
+		jp	p,srl_11
+		inc_error_cnt
+srl_11:		ld	a,b
+		cp	a,data_55
+		jr	z,srl_12
+		inc_error_cnt
+srl_12:		ld	c,data_7f
+		srl	c
+		jr	c,srl_13
+		inc_error_cnt
+srl_13:		ld	a,c
+		cp	a,#3f
+		jr	z,srl_14
+		inc_error_cnt
+srl_14:		ld	d,data_55
+		srl	d
+		jr	c,srl_15
+		inc_error_cnt
+srl_15:		ld	a,d
+		cp	a,#2a
+		jr	z,srl_16
+		inc_error_cnt
+srl_16:		ld	e,data_ff
+		srl	e
+		jr	c,srl_17
+		inc_error_cnt
+srl_17:		ld	a,e
+		cp	a,data_7f
+		jr	z,srl_18
+		inc_error_cnt
+srl_18:		ld	h,#12      ;bjp was >data_1234
+		srl	h
+		jr	nc,srl_19
+		inc_error_cnt
+srl_19:		ld	a,h
+		cp	a,9
+		jr	z,srl_20
+		inc_error_cnt
+srl_20:		ld	l,#34      ;bjp was >data_1234
+		srl	l
+		jr	nc,srl_21
+		inc_error_cnt
+srl_21:		ld	a,l
+		cp	a,#1a
+		jr	z,srl_22
+		inc_error_cnt
+srl_22:		ld	hl,t_var1
+		ld	(hl),data_55
+		srl	(hl)
+		jr	c,srl_23
+		inc_error_cnt
+srl_23:		jp	po,srl_24
+		inc_error_cnt
+srl_24:		srl	(hl)
+		jr	nc,srl_25
+		inc_error_cnt
+srl_25:		srl	(hl)
+		jp	pe,srl_26
+		inc_error_cnt
+srl_26:		ld	a,(hl)
+		cp	a,#0a			;data_aa.and.#0f
+		jr	z,srl_27
+		inc_error_cnt
+srl_27:		ld	(hl),data_80
+		and	(hl)
+		jp	z,srl_28
+		inc_error_cnt
+srl_28:		srl	(hl)
+		jp	p,srl_29
+		inc_error_cnt
+srl_29:		ld	a,(hl)
+		cp	a,#40
+		jr	z,srl_30
+		inc_error_cnt
+srl_30:		ld	(hl),2
+		srl	(hl)
+		jr	nz,srl_31
+		inc_error_cnt
+srl_31:		srl	(hl)
+		jr	z,srl_32
+		inc_error_cnt
+srl_32:		jr	c,srl_33
+		inc_error_cnt
+srl_33:		ld	ix,t_var3
+		ld	a,data_55
+		ld	(ix+2),a
+		srl	(ix+2)
+		jr	c,srl_34
+		inc_error_cnt
+srl_34:		jp	po,srl_35
+		inc_error_cnt
+srl_35:		srl	(ix+2)
+		jr	nc,srl_36
+		inc_error_cnt
+srl_36:		srl	(ix+2)
+		jp	pe,srl_37
+		inc_error_cnt
+srl_37:		ld	a,(ix+2)
+		cp	a,#0a			;data_aa.and.#0f
+		jr	z,srl_38
+		inc_error_cnt
+srl_38:		ld	a,data_80
+		ld	(ix-2),a
+		and	(ix-2)
+		jp	m,srl_39
+		inc_error_cnt
+srl_39:		srl	(ix-2)
+		jp	p,srl_40
+		inc_error_cnt
+srl_40:		ld	a,(ix-2)
+		cp	a,#40
+		jr	z,srl_41
+		inc_error_cnt
+srl_41:		ld	a,2
+		ld	(ix+1),a
+		srl	(ix+1)
+		jr	nz,srl_42
+		inc_error_cnt
+srl_42:		srl	(ix+1)
+		jr	z,srl_43
+		inc_error_cnt
+srl_43:		jr	c,srl_44
+		inc_error_cnt
+srl_44:		ld	iy,t_var3
+		ld	a,data_55
+		ld	(iy+2),a
+		srl	(iy+2)
+		jr	c,srl_45
+		inc_error_cnt
+srl_45:		jp	po,srl_46
+		inc_error_cnt
+srl_46:		srl	(iy+2)
+		jr	nc,srl_47
+		inc_error_cnt
+srl_47:		srl	(iy+2)
+		jp	pe,srl_48
+		inc_error_cnt
+srl_48:		ld	a,(iy+2)
+		cp	a,#0a			;data_aa.and.#0f
+		jr	z,srl_49
+		inc_error_cnt
+srl_49:		ld	a,data_80
+		ld	(iy-2),a
+		and	(iy-2)
+		jp	m,srl_50
+		inc_error_cnt
+srl_50:		srl	(iy-2)
+		jp	p,srl_51
+		inc_error_cnt
+srl_51:		ld	a,(iy-2)
+		cp	a,#40
+		jr	z,srl_52
+		inc_error_cnt
+srl_52:		ld	a,2
+		ld	(iy+1),a
+		srl	(iy+1)
+		jr	nz,srl_53
+		inc_error_cnt
+srl_53:		srl	(iy+1)
+		jr	z,srl_54
+		inc_error_cnt
+srl_54:		jr	c,rld_0
+		inc_error_cnt
+rld_0:		ld	hl,t_var5
+		ld	a,data_55
+		ld	(hl),data_aa
+		rld
+		jp	p,rld_1
+		inc_error_cnt
+rld_1:		cp	a,data_55+5
+		jr	z,rld_2
+		inc_error_cnt
+rld_2:		ld	a,(hl)
+		cp	a,data_aa-5
+		jr	z,rld_3
+		inc_error_cnt
+rld_3:		ld	(hl),data_7f
+		ld	a,data_80
+		rld
+		jp	m,rld_4
+		inc_error_cnt
+rld_4:		jp	pe,rld_5
+		inc_error_cnt
+rld_5:		rld
+		jp	po,rld_6
+		inc_error_cnt
+rld_6:		cp	a,data_80+15
+		jr	z,rld_7
+		inc_error_cnt
+rld_7:		ld	a,(hl)
+		cp	a,7
+		jr	z,rld_8
+		inc_error_cnt
+rld_8:		ld	a,#05			;data_55.and.#0f
+		ld	(hl),#0a			;data_aa.and.#0f
+		rld
+		jr	z,rld_9
+		inc_error_cnt
+rld_9:		ld	a,(hl)
+		cp	a,#a5
+		jr	z,rrd_0
+		inc_error_cnt
+rrd_0:		ld	hl,t_var3
+		ld	a,data_55
+		ld	(hl),data_aa
+		rrd
+		jp	p,rrd_1
+		inc_error_cnt
+rrd_1:		jp	pe,rrd_2
+		inc_error_cnt
+rrd_2:		jr	nz,rrd_3
+		inc_error_cnt
+rrd_3:		cp	a,data_55+5
+		jr	z,rrd_4
+		inc_error_cnt
+rrd_4:		ld	a,(hl)
+		cp	a,data_55+5
+		jr	z,rrd_5
+		inc_error_cnt
+rrd_5:		ld	(hl),data_7f
+		ld	a,data_80
+		rrd
+		jp	m,rrd_6
+		inc_error_cnt
+rrd_6:		jp	po,rrd_7
+		inc_error_cnt
+rrd_7:		cp	a,data_80+15
+		jr	z,rrd_8
+		inc_error_cnt
+rrd_8:		ld	a,(hl)
+		cp	a,7
+		jr	z,rrd_9
+		inc_error_cnt
+rrd_9:		ld	a,8
+		ld	(hl),0
+		rrd
+		jr	z,rrd_10
+		inc_error_cnt
+rrd_10:		ld	a,(hl)
+		cp	a,data_80
+		jr	z,bit_0
+		inc_error_cnt
+bit_0:		ld	a,data_ff
+		bit	0,a
+		jr	nz,bit_1
+		inc_error_cnt
+bit_1:		bit	1,a
+		jr	nz,bit_2
+		inc_error_cnt
+bit_2:		bit	2,a
+		jr	nz,bit_3
+		inc_error_cnt
+bit_3:		bit	3,a
+		jr	nz,bit_4
+		inc_error_cnt
+bit_4:		bit	4,a
+		jr	nz,bit_5
+		inc_error_cnt
+bit_5:		bit	5,a
+		jr	nz,bit_6
+		inc_error_cnt
+bit_6:		bit	6,a
+		jr	nz,bit_7
+		inc_error_cnt
+bit_7:		bit	7,a
+		jr	nz,bit_8
+		inc_error_cnt
+bit_8:		ld	a,0
+		bit	0,a
+		jr	z,bit_9
+		inc_error_cnt
+bit_9:		bit	1,a
+		jr	z,bit_10
+		inc_error_cnt
+bit_10:		bit	2,a
+		jr	z,bit_11
+		inc_error_cnt
+bit_11:		bit	3,a
+		jr	z,bit_12
+		inc_error_cnt
+bit_12:		bit	4,a
+		jr	z,bit_13
+		inc_error_cnt
+bit_13:		bit	5,a
+		jr	z,bit_14
+		inc_error_cnt
+bit_14:		bit	6,a
+		jr	z,bit_15
+		inc_error_cnt
+bit_15:		bit	7,a
+		jr	z,bit_16
+		inc_error_cnt
+bit_16:		ld	b,data_80
+		bit	2,b
+		jr	z,bit_17
+		inc_error_cnt
+bit_17:		bit	7,b
+		jr	nz,bit_18
+		inc_error_cnt
+bit_18:		ld	c,data_55
+		bit	7,c
+		jr	z,bit_19
+		inc_error_cnt
+bit_19:		bit	0,c
+		jr	nz,bit_20
+		inc_error_cnt
+bit_20:		ld	d,data_aa
+		bit	7,d
+		jr	nz,bit_21
+		inc_error_cnt
+bit_21:		bit	4,d
+		jr	z,bit_22
+		inc_error_cnt
+bit_22:		ld	e,data_7f
+		bit	7,e
+		jr	z,bit_23
+		inc_error_cnt
+bit_23:		bit	3,e
+		jr	nz,bit_24
+		inc_error_cnt
+bit_24:		ld	h,#12      ;bjp was >data_1234
+		bit	4,h
+		jr	nz,bit_25
+		inc_error_cnt
+bit_25:		bit	2,h
+		jr	z,bit_26
+		inc_error_cnt
+bit_26:		ld	l,#34      ;bjp was >data_1234
+		bit	3,l
+		jr	z,bit_27
+		inc_error_cnt
+bit_27:		bit	2,l
+		jr	nz,bit_28
+		inc_error_cnt
+bit_28:		ld	hl,t_var4
+		ld	(hl),data_55
+		bit	0,(hl)
+		jr	nz,bit_29
+		inc_error_cnt
+bit_29:		bit	1,(hl)
+		jr	z,bit_30
+		inc_error_cnt
+bit_30:		bit	2,(hl)
+		jr	nz,bit_31
+		inc_error_cnt
+bit_31:		bit	3,(hl)
+		jr	z,bit_32
+		inc_error_cnt
+bit_32:		bit	4,(hl)
+		jr	nz,bit_33
+		inc_error_cnt
+bit_33:		bit	5,(hl)
+		jr	z,bit_34
+		inc_error_cnt
+bit_34:		bit	6,(hl)
+		jr	nz,bit_35
+		inc_error_cnt
+bit_35:		bit	7,(hl)
+		jr	z,bit_36
+		inc_error_cnt
+bit_36:		ld	ix,t_var3
+		ld	a,data_aa
+		ld	(ix-2),a
+		bit	0,(ix-2)
+		jr	z,bit_37
+		inc_error_cnt
+bit_37:		bit	1,(ix-2)
+		jr	nz,bit_38
+		inc_error_cnt
+bit_38:		bit	2,(ix-2)
+		jr	z,bit_39
+		inc_error_cnt
+bit_39:		bit	3,(ix-2)
+		jr	nz,bit_40
+		inc_error_cnt
+bit_40:		bit	4,(ix-2)
+		jr	z,bit_41
+		inc_error_cnt
+bit_41:		bit	5,(ix-2)
+		jr	nz,bit_42
+		inc_error_cnt
+bit_42:		bit	6,(ix-2)
+		jr	z,bit_43
+		inc_error_cnt
+bit_43:		bit	7,(ix-2)
+		jr	nz,bit_44
+		inc_error_cnt
+bit_44:		ld	iy,t_var3
+		ld	a,data_55
+		ld	(iy+2),a
+		bit	0,(iy+2)
+		jr	nz,bit_45
+		inc_error_cnt
+bit_45:		bit	1,(iy+2)
+		jr	z,bit_46
+		inc_error_cnt
+bit_46:		bit	2,(iy+2)
+		jr	nz,bit_47
+		inc_error_cnt
+bit_47:		bit	3,(iy+2)
+		jr	z,bit_48
+		inc_error_cnt
+bit_48:		bit	4,(iy+2)
+		jr	nz,bit_49
+		inc_error_cnt
+bit_49:		bit	5,(iy+2)
+		jr	z,bit_50
+		inc_error_cnt
+bit_50:		bit	6,(iy+2)
+		jr	nz,bit_51
+		inc_error_cnt
+bit_51:		bit	7,(iy+2)
+		jr	z,set_0
+		inc_error_cnt
+set_0:		ld	a,0
+		set	0,a
+		set	2,a
+		set	4,a
+		set	6,a
+		cp	a,data_55
+		jr	z,set_1
+		inc_error_cnt
+set_1:		set	1,a
+		set	3,a
+		set	5,a
+		set	7,a
+		cp	a,data_ff
+		jr	z,set_2
+		inc_error_cnt
+set_2:		ld	b,0
+		set	1,b
+		set	3,b
+		ld	a,b
+		cp	a,#0a			;data_aa.and.#0f
+		jr	z,set_3
+		inc_error_cnt
+set_3:		ld	c,0
+		set	1,c
+		set	4,c
+		ld	a,c
+		cp	a,#12      ;bjp was >data_1234
+		jr	z,set_4
+		inc_error_cnt
+set_4:		ld	d,0
+		set	2,d
+		set	4,d
+		set	5,d
+		ld	a,d
+		cp	a,#34      ;bjp was >data_1234
+		jr	z,set_5
+		inc_error_cnt
+set_5:		ld	e,0
+		set	7,e
+		ld	a,e
+		cp	a,data_80
+		jr	z,set_6
+		inc_error_cnt
+set_6:		ld	h,0
+		set	0,h
+		set	2,h
+		set	4,h
+		set	6,h
+		ld	a,h
+		cp	a,data_55
+		jr	z,set_7
+		inc_error_cnt
+set_7:		ld	l,0
+		set	1,l
+		set	3,l
+		set	5,l
+		set	7,l
+		ld	a,l
+		cp	a,data_aa
+		jr	z,set_8
+		inc_error_cnt
+set_8:		ld	hl,t_var5
+		ld	(hl),0
+		set	0,(hl)
+		set	2,(hl)
+		set	4,(hl)
+		set	6,(hl)
+		ld	a,(hl)
+		cp	a,data_55
+		jr	z,set_9
+		inc_error_cnt
+set_9:		ld	(hl),0
+		set	1,(hl)
+		set	3,(hl)
+		set	5,(hl)
+		set	7,(hl)
+		ld	a,(hl)
+		cp	a,data_aa
+		jr	z,set_10
+		inc_error_cnt
+set_10:		ld	ix,t_var3
+		ld	a,0
+		ld	(ix-2),a
+		ld	(ix+2),a
+		set	0,(ix-2)
+		set	2,(ix-2)
+		set	4,(ix-2)
+		set	6,(ix-2)
+		ld	a,(ix-2)
+		cp	a,data_55
+		jr	z,set_11
+		inc_error_cnt
+set_11:		set	1,(ix+2)
+		set	3,(ix+2)
+		set	5,(ix+2)
+		set	7,(ix+2)
+		ld	a,(ix+2)
+		cp	a,data_aa
+		jr	z,set_12
+		inc_error_cnt
+set_12:		ld	iy,t_var3
+		ld	a,0
+		ld	(iy-1),a
+		ld	(iy+1),a
+		set	0,(iy-1)
+		set	2,(iy-1)
+		set	4,(iy-1)
+		set	6,(iy-1)
+		ld	a,(iy-1)
+		cp	a,data_55
+		jr	z,set_13
+		inc_error_cnt
+set_13:		set	1,(iy+1)
+		set	3,(iy+1)
+		set	5,(iy+1)
+		set	7,(iy+1)
+		ld	a,(iy+1)
+		cp	a,data_aa
+		jr	z,res_0
+		inc_error_cnt
+res_0:		ld	a,data_ff
+		res	7,a
+		cp	a,data_7f
+		jr	z,res_1
+		inc_error_cnt
+res_1:		res	5,a
+		res	3,a
+		res	1,a
+		cp	a,data_55
+		jr	z,res_2
+		inc_error_cnt
+res_2:		ld	a,data_ff
+		res	0,a
+		res	2,a
+		res	4,a
+		res	6,a
+		cp	a,data_aa
+		jr	z,res_3
+		inc_error_cnt
+res_3:		ld	b,data_ff
+		res	7,b
+		ld	a,b
+		cp	a,data_7f
+		jr	z,res_4
+		inc_error_cnt
+res_4:		ld	c,data_ff
+		res	0,c
+		res	1,c
+		res	2,c
+		res	3,c
+		res	4,c
+		res	5,c
+		res	6,c
+		ld	a,c
+		cp	a,data_80
+		jr	z,res_5
+		inc_error_cnt
+res_5:		ld	d,data_ff
+		res	0,d
+		res	2,d
+		res	4,d
+		res	6,d
+		ld	a,d
+		cp	a,data_aa
+		jr	z,res_6
+		inc_error_cnt
+res_6:		ld	e,data_ff
+		res	1,e
+		res	3,e
+		res	5,e
+		res	7,e
+		ld	a,e
+		cp	a,data_55
+		jr	z,res_7
+		inc_error_cnt
+res_7:		ld	h,data_ff
+		res	0,h
+		res	2,h
+		res	3,h
+		res	5,h
+		res	6,h
+		res	7,h
+		ld	a,h
+		cp	a,#12      ;bjp was >data_1234
+		jr	z,res_8
+		inc_error_cnt
+res_8:		ld	l,data_ff
+		res	0,l
+		res	1,l
+		res	3,l
+		res	6,l
+		res	7,l
+		ld	a,l
+		cp	a,#34      ;bjp was >data_1234
+		jr	z,res_9
+		inc_error_cnt
+res_9:		ld	hl,t_var3
+		ld	(hl),data_ff
+		res	0,(hl)
+		res	2,(hl)
+		res	4,(hl)
+		res	6,(hl)
+		ld	a,(hl)
+		cp	a,data_aa
+		jr	z,res_10
+		inc_error_cnt
+res_10:		res	1,(hl)
+		res	3,(hl)
+		res	5,(hl)
+		res	7,(hl)
+		ld	a,(hl)
+		cp	a,0
+		jr	z,res_11
+		inc_error_cnt
+res_11:		ld	ix,t_var3
+		ld	a,data_ff
+		ld	(ix-2),a
+		ld	(ix+2),a
+		res	1,(ix-2)
+		res	3,(ix-2)
+		res	5,(ix-2)
+		res	7,(ix-2)
+		ld	a,(ix-2)
+		cp	a,data_55
+		jr	z,res_12
+		inc_error_cnt
+res_12:		res	0,(ix+2)
+		res	2,(ix+2)
+		res	4,(ix+2)
+		res	6,(ix+2)
+		ld	a,(ix+2)
+		cp	a,data_aa
+		jr	z,res_13
+		inc_error_cnt
+res_13:		ld	iy,t_var3
+		ld	a,data_ff
+		ld	(iy-1),a
+		ld	(iy+1),a
+		res	1,(iy-1)
+		res	3,(iy-1)
+		res	5,(iy-1)
+		res	7,(iy-1)
+		ld	a,(iy-1)
+		cp	a,data_55
+		jr	z,res_14
+		inc_error_cnt
+res_14:		res	0,(iy+1)
+		res	2,(iy+1)
+		res	4,(iy+1)
+		res	6,(iy+1)
+		ld	a,(iy+1)
+		cp	a,data_aa
+		jr	z,jp_0
+		inc_error_cnt
+jp_0:		jp	jp_1
+		nop
+		nop
+		inc_error_cnt
+jp_1:		ld	a,0
+		and	a
+		jp	z,jp_2
+		inc_error_cnt
+jp_2:		jp	nc,jp_3
+		inc_error_cnt
+jp_3:		ld	b,1
+		sub	a,b
+		jp	nz,jp_4
+		inc_error_cnt
+jp_4:		jp	c,jp_5
+		inc_error_cnt
+jp_5:		jp	jp_7
+		inc_error_cnt
+jp_6:		jp	jr_0
+		inc_error_cnt
+jp_7:		jp	jp_6
+		inc_error_cnt
+jr_0:		jr	jr_2
+		inc_error_cnt
+jr_1:		jr	jr_3
+		inc_error_cnt
+jr_2:		jr	jr_1
+		inc_error_cnt
+jr_3:		ld	hl,jp_9
+		jp	(hl)
+		inc_error_cnt
+jp_8:		ld	ix,jp_10
+		jp	(ix)
+		inc_error_cnt
+jp_9:		jp	jp_8
+		inc_error_cnt
+jp_10:		ld	iy,djnz_0
+		jp	(iy)
+		inc_error_cnt
+djnz_0:		ld	b,5
+		ld	a,0
+djnz_1:		inc	a
+		djnz	djnz_1
+		cp	a,5
+		jr	z,call_0
+		inc_error_cnt
+call_0:		ld	a,0
+		call	sub1
+		cp	a,data_7f
+		jr	z,call_1
+		inc_error_cnt
+call_1:		ld	a,0
+		and	a
+		call	z,sub2
+		cp	a,data_55
+		jr	z,call_2
+		inc_error_cnt
+call_2:		ld	a,data_aa
+		and	a
+		call	nz,sub3
+		cp	a,data_aa+1
+		jr	z,call_3
+		inc_error_cnt
+call_3:		ld	a,0
+		cp	a,0
+		call	nc,sub4
+		cp	a,data_ff
+		jr	z,call_4
+		inc_error_cnt
+call_4:		ld	a,0
+		sub	a,1
+		call	c,sub5
+		cp	a,data_ff-1
+		jr	z,call_5
+		inc_error_cnt
+call_5:		ld	a,data_7f
+		sla	a
+		call	po,sub6
+		cp	a,data_7f
+		jr	z,call_6
+		inc_error_cnt
+call_6:		ld	a,data_aa
+		srl	a
+		call	pe,sub7
+		cp	a,data_aa
+		jr	z,call_7
+		inc_error_cnt
+call_7:		ld	a,data_80
+		sra	a
+		call	m,sub8
+		cp	a,data_80
+		jr	z,call_8
+		inc_error_cnt
+call_8:		ld	a,data_7f
+		sra	a
+		call	p,sub9
+		cp	a,data_7f
+		jr	z,rst_0
+		inc_error_cnt
+rst_0:		rst	#00
+		cp	a,1
+		jr	z,rst_1
+		inc_error_cnt
+rst_1:		rst	#08
+		cp	a,2
+		jr	z,rst_2
+		inc_error_cnt
+rst_2:		rst	#10
+		cp	a,3
+		jr	z,rst_3
+		inc_error_cnt
+rst_3:		rst	#18
+		cp	a,4
+		jr	z,rst_4
+		inc_error_cnt
+rst_4:		rst	#20
+		cp	a,5
+		jr	z,rst_5
+		inc_error_cnt
+rst_5:		rst	#28
+		cp	a,6
+		jr	z,rst_6
+		inc_error_cnt
+rst_6:		rst	#30
+		cp	a,7
+		jr	z,rst_7
+		inc_error_cnt
+rst_7:		rst	#38
+		cp	a,8
+		jr	z,in_0
+		inc_error_cnt
+in_0:		in	a,(in_port)
+		cp	a,data_7f
+		jr	z,in_1
+		inc_error_cnt
+in_1:		ld	c,in_port
+		in	a,(c)
+		jr	nz,in_2
+		inc_error_cnt
+in_2:		jp	p,in_3
+		inc_error_cnt
+in_3:		jp	pe,in_4
+		inc_error_cnt
+in_4:		cp	a,data_55
+		jr	z,in_5
+		inc_error_cnt
+in_5:		in	a,(c)
+		jp	m,in_6
+		inc_error_cnt
+in_6:		jp	po,in_7
+		inc_error_cnt
+in_7:		jr	nz,in_8
+		inc_error_cnt
+in_8:		cp	a,data_80
+		jr	z,in_9
+		inc_error_cnt
+in_9:		in	a,(c)
+		jr	z,in_10
+		inc_error_cnt
+in_10:		in	b,(c)
+		jp	m,in_11
+		inc_error_cnt
+in_11:		ld	a,b
+		cp	a,data_ff
+		jr	z,in_12
+		inc_error_cnt
+in_12:		in	d,(c)
+		jp	pe,in_13
+		inc_error_cnt
+in_13:		ld	a,d
+		cp	a,data_aa
+		jr	z,in_14
+		inc_error_cnt
+in_14:		in	e,(c)
+		jp	p,in_15
+		inc_error_cnt
+in_15:		ld	a,e
+		cp	a,data_7f
+		jr	z,in_16
+		inc_error_cnt
+in_16:		in	h,(c)
+		jp	pe,in_17
+		inc_error_cnt
+in_17:		ld	a,h
+		cp	a,data_55
+		jr	z,in_18
+		inc_error_cnt
+in_18:		in	l,(c)
+		jp	m,in_19
+		inc_error_cnt
+in_19:		ld	a,l
+		cp	a,data_80
+		jr	z,in_20
+		inc_error_cnt
+in_20:		in	c,(c)
+		jr	z,in_21
+		inc_error_cnt
+in_21:		ld	c,in_port
+		ld	b,2
+		ld	hl,t_var1
+		ini
+		jr	nz,in_22
+		inc_error_cnt
+in_22:		ini
+		jr	z,in_23
+		inc_error_cnt
+in_23:		ld	hl,t_var1
+		ld	a,(hl)
+		cp	a,data_ff
+		jr	z,in_24
+		inc_error_cnt
+in_24:		inc	hl
+		ld	a,(hl)
+		cp	a,data_aa
+		jr	z,in_25
+		inc_error_cnt
+in_25:		ld	b,5
+		ld	c,in_port
+		ld	hl,t_var1
+		inir
+		jr	z,in_26
+		inc_error_cnt
+in_26:		ld	hl,t_var1
+		ld	a,(hl)
+		cp	a,data_7f
+		jr	z,in_27
+		inc_error_cnt
+in_27:		inc	hl
+		ld	a,(hl)
+		cp	a,data_55
+		jr	z,in_28
+		inc_error_cnt
+in_28:		inc	hl
+		ld	a,(hl)
+		cp	a,data_80
+		jr	z,in_29
+		inc_error_cnt
+in_29:		inc	hl
+		ld	a,(hl)
+		cp	a,0
+		jr	z,in_30
+		inc_error_cnt
+in_30:		inc	hl
+		ld	a,(hl)
+		cp	a,data_ff
+		jr	z,in_31
+		inc_error_cnt
+in_31:		ld	b,2
+		ld	c,in_port
+		ld	hl,t_var5
+		ind
+		jr	nz,in_32
+		inc_error_cnt
+in_32:		ind
+		jr	z,in_33
+		inc_error_cnt
+in_33:		ld	hl,t_var5
+		ld	a,(hl)
+		cp	a,data_aa
+		jr	z,in_34
+		inc_error_cnt
+in_34:		dec	hl
+		ld	a,(hl)
+		cp	a,data_7f
+		jr	z,in_35
+		inc_error_cnt
+in_35:		ld	b,5
+		ld	c,in_port
+		ld	hl,t_var5
+		indr
+		jr	z,in_36
+		inc_error_cnt
+in_36:		ld	hl,t_var5
+		ld	a,(hl)
+		cp	a,data_55
+		jr	z,in_37
+		inc_error_cnt
+in_37:		dec	hl
+		ld	a,(hl)
+		cp	a,data_80
+		jr	z,in_38
+		inc_error_cnt
+in_38:		dec	hl
+		ld	a,(hl)
+		cp	a,0
+		jr	z,in_39
+		inc_error_cnt
+in_39:		dec	hl
+		ld	a,(hl)
+		cp	a,data_ff
+		jr	z,in_40
+		inc_error_cnt
+in_40:		dec	hl
+		ld	a,(hl)
+		cp	a,data_aa
+		jr	z,ldi_0
+		inc_error_cnt
+ldi_0:		ld	hl,t_var1
+		ld	a,#12      ;bjp was >data_1234
+		ld	(hl),a
+		inc	hl
+		ld	a,#34      ;bjp was >data_1234
+		ld	(hl),a
+		dec	hl
+		ld	de,t_var3
+		ld	bc,2
+		ldi
+		jp	pe,ldi_1
+		inc_error_cnt
+ldi_1:		ldi
+		jp	po,ldi_2
+		inc_error_cnt
+ldi_2:		ld	hl,t_var3
+		ld	a,(hl)
+		cp	a,#12      ;bjp was >data_1234
+		jr	z,ldi_3
+		inc_error_cnt
+ldi_3:		inc	hl
+		ld	a,(hl)
+		cp	a,#34      ;bjp was >data_1234
+		jr	z,ldir_0
+		inc_error_cnt
+ldir_0:		ld	hl,var1
+		ld	de,t_var1
+		ld	bc,5
+		ldir
+		jp	po,ldir_1
+		inc_error_cnt
+ldir_1:		ld	hl,t_var1
+		ld	a,(hl)
+		cp	a,data_ff
+		jr	z,ldir_2
+		inc_error_cnt
+ldir_2:		inc	hl
+		ld	a,(hl)
+		cp	a,data_55
+		jr	z,ldir_3
+		inc_error_cnt
+ldir_3:		inc	hl
+		ld	a,(hl)
+		cp	a,data_80
+		jr	z,ldir_4
+		inc_error_cnt
+ldir_4:		inc	hl
+		ld	a,(hl)
+		cp	a,data_aa
+		jr	z,ldir_5
+		inc_error_cnt
+ldir_5:		inc	hl
+		ld	a,(hl)
+		cp	a,data_7f
+		jr	z,ldd_0
+		inc_error_cnt
+ldd_0:		ld	hl,t_var5
+		ld	a,#12      ;bjp was >data_1234
+		ld	(hl),a
+		dec	hl
+		ld	a,#34      ;bjp was >data_1234
+		ld	(hl),a
+		inc	hl
+		ld	bc,2
+		ld	de,t_var3
+		ldd
+		jp	pe,ldd_1
+		inc_error_cnt
+ldd_1:		ldd
+		jp	po,ldd_2
+		inc_error_cnt
+ldd_2:		ld	hl,t_var3
+		ld	a,(hl)
+		cp	a,#12      ;bjp was >data_1234
+		jr	z,ldd_3
+		inc_error_cnt
+ldd_3:		dec	hl
+		ld	a,(hl)
+		cp	a,#34      ;bjp was >data_1234
+		jr	z,lddr_0
+		inc_error_cnt
+lddr_0:		ld	bc,5
+		ld	hl,var5
+		ld	de,t_var5
+		lddr
+		jp	po,lddr_1
+		inc_error_cnt
+lddr_1:		ld	hl,t_var1
+		ld	a,(hl)
+		cp	a,data_ff
+		jr	z,lddr_2
+		inc_error_cnt
+lddr_2:		inc	hl
+		ld	a,(hl)
+		cp	a,data_55
+		jr	z,lddr_3
+		inc_error_cnt
+lddr_3:		inc	hl
+		ld	a,(hl)
+		cp	a,data_80
+		jr	z,lddr_4
+		inc_error_cnt
+lddr_4:		inc	hl
+		ld	a,(hl)
+		cp	a,data_aa
+		jr	z,lddr_5
+		inc_error_cnt
+lddr_5:		inc	hl
+		ld	a,(hl)
+		cp	a,data_7f
+		jr	z,cpi_0
+		inc_error_cnt
+cpi_0:		ld	hl,t_var1
+		ld	bc,5
+		ld	a,data_7f
+		cpi
+		jp	pe,cpi_1
+		inc_error_cnt
+cpi_1:		jp	m,cpi_2
+		inc_error_cnt
+cpi_2:		jr	nz,cpi_3
+		inc_error_cnt
+cpi_3:		cpi
+		jp	pe,cpi_4
+		inc_error_cnt
+cpi_4:		jp	p,cpi_5
+		inc_error_cnt
+cpi_5:		jr	nz,cpi_6
+		inc_error_cnt
+cpi_6:		cpi
+		jp	pe,cpi_7
+		inc_error_cnt
+cpi_7:		jp	m,cpi_8
+		inc_error_cnt
+cpi_8:		jr	nz,cpi_9
+		inc_error_cnt
+cpi_9:		cpi
+		jp	pe,cpi_10
+		inc_error_cnt
+cpi_10:		jp	m,cpi_11
+		inc_error_cnt
+cpi_11:		jr	nz,cpi_12
+		inc_error_cnt
+cpi_12:		cpi
+		jp	po,cpi_13
+		inc_error_cnt
+cpi_13:		jp	p,cpi_14
+		inc_error_cnt
+cpi_14:		jr	z,cpir_0
+		inc_error_cnt
+cpir_0:		ld	a,data_aa
+		ld	hl,var1
+		ld	bc,5
+		cpir
+		jr	z,cpir_1
+		inc_error_cnt
+cpir_1:		jp	pe,cpir_2
+		inc_error_cnt
+cpir_2:		ld	a,b
+		cp	a,0
+		jr	z,cpir_3
+		inc_error_cnt
+cpir_3:		ld	a,c
+		cp	a,1
+		jr	z,cpir_4
+		inc_error_cnt
+cpir_4:		ld	a,data_7f
+		ld	hl,var1
+		ld	bc,5
+		cpir
+		jp	po,cpir_5
+		inc_error_cnt
+cpir_5:		jr	z,cpir_6
+		inc_error_cnt
+cpir_6:		ld	a,#34      ;bjp was >data_1234
+		ld	hl,var1
+		ld	bc,5
+		cpir
+		jp	po,cpir_7
+		inc_error_cnt
+cpir_7:		jr	nz,cpir_8
+		inc_error_cnt
+cpir_8:		jp	m,cpir_9
+		inc_error_cnt
+cpir_9:		ld	a,data_aa
+		ld	hl,var1
+		ld	bc,3
+		cpir
+		jp	po,cpir_10
+		inc_error_cnt
+cpir_10:	jp	p,cpir_11
+		inc_error_cnt
+cpir_11:	jr	nz,cpd_0
+		inc_error_cnt
+cpd_0:		ld	a,data_ff
+		ld	hl,var5
+		ld	bc,5
+		cpd
+		jp	m,cpd_1
+		inc_error_cnt
+cpd_1:		jp	pe,cpd_2
+		inc_error_cnt
+cpd_2:		jr	nz,cpd_3
+		inc_error_cnt
+cpd_3:		cpd
+		jp	p,cpd_4
+		inc_error_cnt
+cpd_4:		jp	pe,cpd_5
+		inc_error_cnt
+cpd_5:		jr	nz,cpd_6
+		inc_error_cnt
+cpd_6:		cpd
+		jp	p,cpd_7
+		inc_error_cnt
+cpd_7:		jp	pe,cpd_8
+		inc_error_cnt
+cpd_8:		jr	nz,cpd_9
+		inc_error_cnt
+cpd_9:		cpd
+		jp	m,cpd_10
+		inc_error_cnt
+cpd_10:		jp	pe,cpd_11
+		inc_error_cnt
+cpd_11:		jr	nz,cpd_12
+		inc_error_cnt
+cpd_12:		cpd
+		jp	p,cpd_13
+		inc_error_cnt
+cpd_13:		jp	po,cpd_14
+		inc_error_cnt
+cpd_14:		jr	z,cpdr_0
+		inc_error_cnt
+cpdr_0:		ld	a,data_80
+		ld	hl,var5
+		ld	bc,5
+		cpdr
+		jp	pe,cpdr_1
+		inc_error_cnt
+cpdr_1:		jp	p,cpdr_2
+		inc_error_cnt
+cpdr_2:		jr	z,cpdr_3
+		inc_error_cnt
+cpdr_3:		ld	a,b
+		cp	a,0
+		jr	z,cpdr_4
+		inc_error_cnt
+cpdr_4:		ld	a,c
+		cp	a,2
+		jr	z,cpdr_5
+		inc_error_cnt
+cpdr_5:		ld	a,#34      ;bjp was >data_1234
+		ld	hl,var5
+		ld	bc,5
+		cpdr
+		jp	po,cpdr_6
+		inc_error_cnt
+cpdr_6:		jr	nz,cpdr_7
+		inc_error_cnt
+cpdr_7:		jp	p,cpdr_8
+		inc_error_cnt
+cpdr_8:		ld	a,#34      ;bjp was >data_1234
+		ld	hl,var5
+		ld	bc,3
+		cpdr
+		jp	po,cpdr_9
+		inc_error_cnt
+cpdr_9:		jr	nz,cpdr_10
+		inc_error_cnt
+cpdr_10:	jp	m,out_0
+		inc_error_cnt
+;
+;the file portfe.xxx must be examined to see if the proper output is generated
+;
+out_0:		ld	a,#30
+		out	(out_port),a
+		ld	c,out_port
+		ld	a,#31
+		out	(c),a
+		ld	b,#32
+		out	(c),b
+		ld	d,#33
+		out	(c),d
+		ld	e,#34
+		out	(c),e
+		ld	h,#35
+		out	(c),h
+		ld	l,#36
+		out	(c),l
+		out	(c),c			;output value divider
+outi_0:		ld	a,#31			;set up output values
+		ld	b,5
+		ld	hl,t_var1
+outi_1:		ld	(hl),a
+		inc	a
+		inc	hl
+		djnz	outi_1
+outi_2:		ld	c,out_port
+		ld	b,5
+		ld	hl,t_var1
+outi_3:		outi
+		jr	nz,outi_3
+otir_0:		out	(c),c			;output value divider
+		ld	hl,t_var1
+		ld	b,5
+		otir
+		jr	z,outd_0
+		inc_error_cnt
+outd_0:		out	(c),c
+		ld	hl,t_var5
+		ld	b,5
+outd_1:		outd
+		jr	nz,outd_1
+otdr_0:		out	(c),c
+		ld	b,5
+		ld	hl,t_var5
+		otdr
+		jr	z,otdr_1
+		inc_error_cnt
+otdr_1:		out	(c),c
+		ld	a,#0d
+		out	(c),a
+		ld	a,#0a
+		out	(c),a
 inc_pass:	ld	a,(pass_count)
 		inc	a
 		ld	(pass_count),a

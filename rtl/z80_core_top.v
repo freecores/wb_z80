@@ -37,16 +37,19 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //  CVS Log
 //
-//  $Id: z80_core_top.v,v 1.3 2004-05-13 14:58:53 bporcella Exp $
+//  $Id: z80_core_top.v,v 1.4 2004-05-18 22:31:21 bporcella Exp $
 //
-//  $Date: 2004-05-13 14:58:53 $
-//  $Revision: 1.3 $
+//  $Date: 2004-05-18 22:31:21 $
+//  $Revision: 1.4 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.3  2004/05/13 14:58:53  bporcella
+//      testbed built and verification in progress
+//
 //      Revision 1.2  2004/04/27 21:38:22  bporcella
 //      test lint on core
 //
@@ -121,7 +124,7 @@ wire   [7:0]     ar, fr, br, cr, dr, er, hr, lr, intr;
 wire   [15:0]    ixr, iyr;
 wire   [7:0]     wb_dat_i, wb_dat_o, sdram_do, cfg_do;
 wire   [15:0]    add16;         //  ir2 execution engine output for sp updates
-
+wire   [7:0]     alu8_out, sh_alu, bit_alu;
 
 
 
@@ -153,6 +156,9 @@ z80_memstate2 i_z80_memstate2(
                 .wb_dat_i(cfg_do), .wb_ack_i(cfg_ack_o), 
                 .int_req_i(int_req_i),
                 .add16(add16),
+                .alu8_out(alu8_out),
+                .sh_alu(sh_alu),
+                .bit_alu(bit_alu),
                 .wb_clk_i(wb_clk_i),
                 .rst_i(wb_rst_i)         // keep this generic - may turn out to be different from wb_rst
                  );
@@ -163,7 +169,9 @@ z80_inst_exec i_z80_inst_exec(
                   .cr_eq0(cr_eq0),
                   .upd_ar(upd_ar), .upd_br(upd_br), .upd_cr(upd_cr), .upd_dr(upd_dr), .upd_er(upd_er), .upd_hr(upd_hr), .upd_lr(upd_lr),.upd_fr(upd_fr),
                   .ar(ar), .fr(fr), .br(br), .cr(cr), .dr(dr), .er(er), .hr(hr), .lr(lr), .intr(intr), 
-                  .ixr(ixr), .iyr(iyr), .add16(add16),
+                  .ixr(ixr), .iyr(iyr), .add16(add16), .alu8_out(alu8_out),
+                   .sh_alu(sh_alu),
+                   .bit_alu(bit_alu),
                    .exec_ir2(exec_ir2),
                    .exec_decbc(exec_decbc), .exec_decb(exec_decb), 
                    .ir2(ir2),

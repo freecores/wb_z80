@@ -109,16 +109,19 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: z80_memstate2.v,v 1.2 2004-05-13 14:58:53 bporcella Exp $
+//  $Id: z80_memstate2.v,v 1.3 2004-05-18 22:31:21 bporcella Exp $
 //
-//  $Date: 2004-05-13 14:58:53 $
-//  $Revision: 1.2 $
+//  $Date: 2004-05-18 22:31:21 $
+//  $Revision: 1.3 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.2  2004/05/13 14:58:53  bporcella
+//      testbed built and verification in progress
+//
 //      Revision 1.1  2004/04/27 21:27:13  bporcella
 //      first core build
 //
@@ -160,6 +163,9 @@ module z80_memstate2(wb_adr_o, wb_we_o, wb_cyc_o, wb_stb_o, wb_tga_o, wb_dat_o,
                 wb_dat_i, wb_ack_i, wb_clk_i, rst_i,
                 int_req_i,
                 add16,
+                alu8_out,
+                sh_alu,
+                bit_alu,
                 wb_clk_i,
                 rst_i
 
@@ -200,8 +206,9 @@ input [7:0]     wb_dat_i;
 input           wb_ack_i, wb_clk_i, rst_i;
 input           int_req_i;     
 input [15:0]    add16;         //  ir2 execution engine output for sp updates
-
-
+input [7:0]     alu8_out;
+input [7:0]     sh_alu;        // rmw shifts
+input [7:0]     bit_alu;
 //-------1---------2---------3--------Parameters-----------6---------7---------8---------9--------0
 `include "opcodes.v"            //  states of the main memory sequencer
 
@@ -287,8 +294,11 @@ parameter       DEC_IDLE      = 6'h00,
                 DEC_INT5      = 6'h36, 
                 DEC_RET       = 6'h37,
                 DEC_NNJMP     = 6'h38,
-                DEC_RET2      = 6'h39 ;
-                             
+                DEC_DDN       = 6'h39,
+                DEC_RET2      = 6'h3a,
+                DEC_EXSPHL    = 6'h3b,
+                DEC_RMWDD1    = 6'h3c,
+                DEC_RMWDD2    = 6'h3d ;
 //  initial decode assignemnts.   These assignemens are made to wires on an initial decode
 //  to help document next state transitions
 parameter      I1_CB    = 4'h0,
@@ -397,7 +407,8 @@ wire [3:0]  mem_exec_dec;
 wire  [5:0]        next_dec_state;
 wire  [4:0]        next_mem_state;
 wire  [3:0]        next_pipe_state;             
-wire               ed_dbl_rd;             
+wire               ed_dbl_rd;  
+wire  [15:0]       hl_or_ixiy;
 //-------1---------2---------3--------Registers------------6---------7---------8---------9--------0
 
 reg [15:0]   pc;
@@ -429,6 +440,7 @@ reg          blk_io_flg;
 reg          flag_os1;
 reg          int_en, en_int_next;
 reg          wb_irq_sync;
+reg          ex_tos_hl;    // special flag to help implement EXs6SP7_HL
 //-------1---------2---------3--------Assignments----------6---------7---------8---------9--------0
 //
 // ir is 10 bits most significant codes ir1[9:8] = { EDgrp, CBgrp }  DDgrp and FDgrp are modifiers
@@ -444,7 +456,9 @@ assign hl = {hr, lr};
 assign de = {dr, er}; 
 assign bc = {br, cr};
 
-
+assign hl_or_ixiy = ir1dd ? ixr :
+                    ir1fd ? iyr :
+                            hl   ;
 //  this "groups" the instructions to determine first memory operation
 
 parameter  I1DCNT = 4;  // parameter used below simply to make possible change easier.
@@ -694,7 +708,7 @@ assign mem_exec_dec =
     {I1DCNT {RETsPO== ir1 & ~pvf}} & I1_RET |//      RET PO       ; E0
     {I1DCNT {RETsNZ== ir1 & ~zf }} & I1_RET |//      RET NZ       ; C0
     {I1DCNT {RETsZ == ir1 & zf  }} & I1_RET |//      RET Z        ; C8
-    {I1DCNT {EXs6SP7_HL   == ir1}} & I1_RMW |//      EX (SP),HL   ; E3
+    {I1DCNT {EXs6SP7_HL   == ir1}} & I1_POP |//      EX (SP),HL   ; E3
     {I1DCNT {DECs6HL7     == ir1}} & I1_RMW |//      DEC (HL)     ; 35
     {I1DCNT {INCs6HL7     == ir1}} & I1_RMW |//      INC (HL)     ; 34
     {I1DCNT {RSTs0        == ir1}} & I1_RST |//      RST 0        ; C7
@@ -862,33 +876,46 @@ wire os_a  =  LDs6BC7_A    == ir1 |  //      LD (BC),A    ; 02
 
 wire os_b = LDs6HL7_B      == ir1                                       |  // LD (HL),B    ; 70
             ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_BC == ir1[5:4] |
+            PUSHsBC        == ir1                                       |  // PUSH BC
             ED_OUTs6C7_REG ==  {ir1[9:6],ir1[2:0]} & REG8_B == ir1[5:3] ;   
             
 wire os_c = LDs6HL7_C    == ir1                                         |  //      LD (HL),C    ; 71
-            PUSHsBC        == ir1                                       |  // PUSH BC
             ED_OUTs6C7_REG ==  {ir1[9:6],ir1[2:0]} & REG8_C == ir1[5:3] ;
             
 wire os_d = LDs6HL7_D    == ir1                                         |  //      LD (HL),D    ; 72
+            PUSHsDE      == ir1                                         |  //      PUSH DE
             ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_DE == ir1[5:4] |
             ED_OUTs6C7_REG ==  {ir1[9:6],ir1[2:0]} & REG8_D == ir1[5:3] ;
             
             
 wire os_e = LDs6HL7_E    == ir1                                     |  //      LD (HL),E    ; 73
-            PUSHsDE      == ir1                                         |  //      PUSH DE
             ED_OUTs6C7_REG ==  {ir1[9:6],ir1[2:0]} & REG8_E == ir1[5:3] ;
             
 wire os_h = LDs6HL7_H    == ir1                                         |  //      LD (HL),H    ; 74
-            LDs6NN7_HL   == ir1                                         |  //      LD (NN),HL   ; 22 XX XX
-            ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_HL == ir1[5:4] |
+            PUSHsHL      == ir1                                         |  // need this here for hazard detect
             ED_OUTs6C7_REG ==  {ir1[9:6],ir1[2:0]} & REG8_H == ir1[5:3] ;
 
 wire os_l = LDs6HL7_L    == ir1                                     |  //      LD (HL),L    ; 75
-            PUSHsHL      == ir1                                     |  
             ED_OUTs6C7_REG ==  {ir1[9:6],ir1[2:0]} & REG8_L == ir1[5:3] ;
+
+
+// these need special treatment of nn register, but as each is an NN type, there 
+// is no risk of a hazard.
+wire os_bc = ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_BC == ir1[5:4];
+wire os_de = ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_DE == ir1[5:4];
+wire os_sp = ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_SP == ir1[5:4];
+
+
+wire os_hl =   LDs6NN7_HL   == ir1 & ~(ir1dd | ir2dd)                        | 
+               ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_HL == ir1[5:4] ;
+               
+wire os_ixr =  LDs6NN7_HL   == ir1 & ir1dd;
+wire os_iyr =  LDs6NN7_HL   == ir1 & ir1fd;
+
 
 // wire os_sp = ED_LDs6NN7_REG == {ir1[9:6],ir1[3:0]} & DBL_REG_SP == ir1[5:4]; not used ?
 
-wire os_f  =  PUSHsAF     == ir1 ;                                        
+// wire os_f  =  PUSHsAF     == ir1 ;                                        
 
 
 //---------------- inst hazard ----------------------------------------------------------
@@ -943,11 +970,14 @@ wire  use_hl_exec =  LDsSP_HL == ir1      |  INCs6HL7     == ir1  |
                      LDsE_6HL7    == ir1  |  LDs6HL7_H    == ir1  |
                      LDsH_6HL7    == ir1  |  LDs6HL7_L    == ir1  |
                      LDsL_6HL7    == ir1  |  JPsHL        == ir1  |
-                     ORs6HL7      == ir1  |  DECs6HL7     == ir1  ;
+                     ORs6HL7      == ir1  |  DECs6HL7     == ir1  |
+                     PUSHsHL      == ir1;
 wire  use_bc_exec =  LDsA_6BC7    == ir1 |
-                     LDs6BC7_A    == ir1 ;
+                     LDs6BC7_A    == ir1 |
+                     PUSHsBC      == ir1  ;
 wire  use_de_exec =  LDs6DE7_A    == ir1 |
-                     LDsA_6DE7    == ir1 ;
+                     LDsA_6DE7    == ir1 |
+                     PUSHsDE      == ir1  ;
                      
 wire  use_sp_exec =  MEM_OFSP == next_mem_state |
                      MEM_OSSP == next_mem_state  ; 
@@ -961,7 +991,8 @@ wire use_fr_exec = ( RETsC        == ir1  |
                      RETsPE       == ir1  |
                      RETsPO       == ir1  |
                      RETsNZ       == ir1  |
-                     RETsZ        == ir1   ) ;
+                     RETsZ        == ir1  |
+                     PUSHsAF      == ir1   ) ;
 
 assign hazard =  (dec_state == DEC_EXEC  & exec_ir2 ) & ( upd_fr & use_fr_exec  |
                                                           upd_ar & os_a         | 
@@ -1047,8 +1078,7 @@ wire  opadr_hl  =  LDsB_6HL7  == ir1 | ORs6HL7    == ir1 | LDs6HL7_B == ir1 |
 //  MEM_OSSP    MEM_OSSP_P     MEM_OSADRP1 MEM_IFINT     MEM_OS_HL_N
 //                                                       
 
-wire src_sp = next_mem_state == MEM_OF1  & EXs6SP7_HL == ir1 | //special case rmw 
-              next_mem_state == MEM_OFSP                     |
+wire src_sp = next_mem_state == MEM_OFSP                     |
               next_mem_state == MEM_OSSP                     |
               next_mem_state == MEM_CALL                       ;
 wire src_pc =  next_mem_state ==   MEM_IFPP1   |
@@ -1072,10 +1102,8 @@ wire src_bc =  dec_state == DEC_EXEC & LDsA_6BC7 == ir1  |
 //  this gets messy as we use wb_adr_o for some of these.
 //
 wire src_hl =   next_mem_state == MEM_OF1  & 
-                                  (dec_state == DEC_EXEC)  & 
                                    !src_de & !src_bc & !src_sp  |
                 next_mem_state == MEM_OS1  &                    
-                                  (dec_state == DEC_EXEC)  &                    
                                    !src_de & !src_bc         |                   
                 next_mem_state == MEM_OFHL_PM                |
                 next_mem_state == MEM_OSHL_PM                |
@@ -1123,6 +1151,8 @@ wire inc    =     next_mem_state ==MEM_OFADRP1                |
                   next_mem_state ==MEM_IFPP1                  |
                   next_mem_state ==MEM_OSSP_PCM2              |
                   next_mem_state ==MEM_IFNN                   |
+                  next_mem_state ==MEM_OFNN                   |
+                  next_mem_state ==MEM_OSNN                   |
                   next_mem_state ==MEM_OSSP_P                  ;
 
 wire dec    =     next_mem_state ==MEM_OFHL_PM & ~block_mv_inc |
@@ -1151,6 +1181,9 @@ wire  pre_inc_dec =    next_mem_state ==  MEM_CALL    |
                        next_mem_state ==  MEM_REL2PC  |
                        next_mem_state ==  MEM_OFIXpD  |
                        next_mem_state ==  MEM_OSIXpD  |
+                       next_mem_state ==  MEM_OFADRP1 |
+                       next_mem_state ==  MEM_OSADRP1 |
+                       
                        next_mem_state ==  MEM_OSSP     ;
 
 
@@ -1210,7 +1243,7 @@ begin
                 I1_POP  : next_state = {DEC_POP,  MEM_OFSP,  IPIPE_EN12};
                 I1_PUSH : next_state = {DEC_PUSH, MEM_OSSP,  IPIPE_EN12};
                 I1_RET  : next_state = {DEC_RET,  MEM_OFSP,  IPIPE_EN12};
-                I1_RMW  : next_state = {DEC_RMW,  MEM_OF1,   IPIPE_EN12};//can't activate till data rdy
+                I1_RMW  : next_state = {DEC_RMW,  MEM_OF1,   IPIPE_EN12};//can't gronk ir1  - blow off if
                 I1_RST  : next_state = {DEC_IF2,  MEM_IFRST, IPIPE_ENN};
                 I1_R2R  : next_state = {DEC_EXEC, MEM_IFPP1, IPIPE_EN12A2};
                 I1_JMPR : next_state = {DEC_N,    MEM_NOP,   IPIPE_ENN};
@@ -1221,21 +1254,24 @@ begin
                 else        next_state = {DEC_EXEC, MEM_IFPP1, IPIPE_EN12A2};
         DEC_DDFD:   // except for CB and EB these all act the same H and L get modified by prefix
             case (mem_exec_dec)
-            I1_CB   : next_state = {DEC_PFxCB,MEM_IFPP1, IPIPE_EN1};// IF2_NOP -> nn <= (MEM)
+            I1_CB   : next_state = {DEC_PFxCB,MEM_IFPP1, IPIPE_ENN};// IF2_NOP -> nn <= (MEM)
             I1_DDFD : next_state = {DEC_DDFD, MEM_IFPP1, IPIPE_EN1};     
             I1_ED   : next_state = {DEC_ED,   MEM_IFPP1, IPIPE_EN1};//How do we clear the prefix?
             I1_JMP  : next_state = {DEC_IF2,  MEM_JMPHL, IPIPE_NOP};  
-            I1_N    : next_state = {DEC_N,    MEM_IFPP1, IPIPE_ENN};
+            I1_N    : next_state = {DEC_DDN,  MEM_IFPP1, IPIPE_ENN};
             I1_NN   : next_state = {DEC_NN,   MEM_IFPP1, IPIPE_ENN};
             I1_OF   : next_state = {DEC_DDOF, MEM_IFPP1, IPIPE_ENN};  // d to nn - need to get d
                                                                       // LD A,(BC) LD A,(DE) will
                                                                       // become ix+d - do we care ?
                                                                       // i hope not
+                                                                      // 5/13/04 the dd mods the index op
+                                                                      //  but NOT the operand  -- gotta kill
+                                                                      //  the prefix on these
             I1_OS   : next_state = {DEC_DDOS, MEM_IFPP1, IPIPE_ENN};  // d to nn
             I1_POP  : next_state = {DEC_POP,  MEM_OFSP,  IPIPE_EN12};
             I1_PUSH : next_state = {DEC_PUSH, MEM_OSSP,  IPIPE_EN12};
             I1_RET  : next_state = {DEC_RET,  MEM_OFSP,  IPIPE_EN12};
-            I1_RMW  : next_state = {DEC_RMW,  MEM_OF1,  IPIPE_EN12};
+            I1_RMW  : next_state = {DEC_RMWDD1,  MEM_IFPP1,  IPIPE_ENNEN2};
             I1_RST  : next_state = {DEC_IF2,  MEM_IFRST, IPIPE_NOP};  // just dump next inst
             I1_R2R  : next_state = {DEC_EXEC, MEM_IFPP1, IPIPE_EN12A2}; //I1_R2R
             I1_JMPR : next_state = {DEC_N,    MEM_NOP,   IPIPE_ENN};
@@ -1243,7 +1279,7 @@ begin
             default : next_state = {DEC_EXEC, MEM_IFPP1, IPIPE_EN12A2}; //I1_R2R  
             endcase
         DEC_ED: 
-            if (ed_nn)            next_state = {DEC_EDNN1,  MEM_IFPP1,   IPIPE_ENN};
+            if (ed_nn)            next_state = {DEC_EDNN1,  MEM_IFPP1,   IPIPE_ENNEN2};
             // we need to set inc and io and repeat flags on this state for continued block
             // processing  --   keep the states of this machine somewhat manageable.
             else if (ed_blk_cp )  next_state = {DEC_EDBCP1, MEM_OFHL_PM, IPIPE_EN12};// MEM_OFHL_PM triggers --BC
@@ -1253,13 +1289,13 @@ begin
             else if (ed_retn   )  next_state = {DEC_RET,    MEM_OFSP,    IPIPE_EN12};// see int logic below
             else                  next_state = {DEC_EXEC, MEM_IFPP1,    IPIPE_EN12A2};
                    // double register reads and writes here    
-        DEC_EDNN1:                next_state = {DEC_EDNN2, MEM_NOP,     IPIPE_ENN}; // address to nn
+        DEC_EDNN1:                next_state = {DEC_EDNN2, MEM_IFPP1,     IPIPE_ENN}; // address to nn
         DEC_EDNN2: 
-            if (ed_dbl_rd)      next_state = {DEC_EDRD1, MEM_OFNN,    IPIPE_NOP};    
-            else                next_state = {DEC_EDWR,  MEM_OSNN,    IPIPE_NOP};// OSNN selects data ok?
+            if (ed_dbl_rd)      next_state = {DEC_EDRD1, MEM_OFNN,    IPIPE_EN12};    
+            else                next_state = {DEC_EDWR,  MEM_OSNN,    IPIPE_EN12};// OSNN selects data ok?
         DEC_EDRD1:              next_state = {DEC_EDRD2, MEM_OFADRP1,  IPIPE_ENN};  // 1st byte 2n         
-        DEC_EDRD2:              next_state = {DEC_IF2,   MEM_IFPP1,   IPIPE_ENNA2}; // 2nd byte 2nn
-        DEC_EDWR:               next_state = {DEC_IF1,   MEM_OSADRP1,  IPIPE_NOP};
+        DEC_EDRD2:              next_state = {DEC_EXEC,   MEM_IFPP1,   IPIPE_ENNA2}; // 2nd byte 2nn
+        DEC_EDWR:               next_state = {DEC_IF2A,   MEM_OSADRP1,  IPIPE_NOP};
         
         //  ED  block moves
         DEC_EDBCP1: 
@@ -1293,10 +1329,16 @@ begin
         DEC_N:
             if (INsA_6N7== ir1)      next_state = {DEC_NIN,  MEM_IOF_N, IPIPE_EN12};
             else if (OUTs6N7_A==ir1) next_state = {DEC_IF2A,  MEM_IOS_N, IPIPE_EN1}; 
-            else if (LDs6HL7_N==ir1) next_state = {DEC_IF1,  MEM_OS_HL_N, IPIPE_EN12};
+            else if (LDs6HL7_N==ir1) next_state = {DEC_IF2A,  MEM_OS_HL_N, IPIPE_EN12};
             else if (jmpr_true)      next_state = {DEC_IF1,  MEM_REL2PC, IPIPE_NOP}; 
             else if (jmpr)           next_state = {DEC_IF2,  MEM_IFPP1,  IPIPE_NOP};
             else                     next_state = {DEC_EXEC, MEM_IFPP1,  IPIPE_EN12A2};//r2r 
+        DEC_DDN:
+            if (INsA_6N7== ir1)      next_state = {DEC_NIN,  MEM_IOF_N, IPIPE_EN12};
+            else if (OUTs6N7_A==ir1) next_state = {DEC_IF2A,  MEM_IOS_N, IPIPE_EN1}; 
+            else if (LDs6HL7_N==ir1) next_state = {DEC_IF1,  MEM_OSIXpD, IPIPE_ENN};
+            else                     next_state = {DEC_EXEC, MEM_IFPP1,  IPIPE_EN12A2};//r2r 
+        
         DEC_NIN:                     next_state = {DEC_IF2,  MEM_IFPP1,    IPIPE_ENNA2};
         
         
@@ -1326,13 +1368,14 @@ begin
         //  general solution  if not DEC_EXEC we get op frmo nn high byte. 
         //  note that first MEM_OSNN trabsferrs nn to wb_adr_o.
         DEC_NNOS1:           next_state = {DEC_NNOS2,   MEM_OSNN,   IPIPE_EN1};
-        DEC_NNOS2:           next_state = {DEC_IF2A,    MEM_OSNN,   IPIPE_NOP};
+        DEC_NNOS2:           next_state = {DEC_IF2A,    MEM_OSADRP1,   IPIPE_NOP};
         DEC_NNOS3:           next_state = {DEC_IF2A,    MEM_OSNN,   IPIPE_EN1};
         
         DEC_NNOF1:           next_state = {DEC_NNOF2,  MEM_OFNN, IPIPE_EN12};
-        DEC_NNOF2:           next_state = {DEC_NNOF4,  MEM_OFNN, IPIPE_ENN};
+        DEC_NNOF2:           next_state = {DEC_NNOF4,  MEM_OFADRP1, IPIPE_ENN};
         DEC_NNOF3:           next_state = {DEC_NNOF4,  MEM_OFNN, IPIPE_EN12};
-        DEC_NNOF4:           next_state = {DEC_EXEC,   MEM_IFPP1, IPIPE_ENNA2};
+        DEC_NNOF4: if (ex_tos_hl) next_state = {DEC_EXSPHL,   MEM_NOP, IPIPE_ENNA2};          
+                   else           next_state = {DEC_EXEC,   MEM_IFPP1, IPIPE_ENNA2};
         
         DEC_DDOS:            next_state = {DEC_IF2A, MEM_OSIXpD, IPIPE_EN12};
         DEC_DDOF:            next_state = {DEC_OF  , MEM_OFIXpD,  IPIPE_EN12};
@@ -1347,7 +1390,7 @@ begin
         DEC_RET2:            next_state = { DEC_NNJMP, MEM_NOP, IPIPE_ENN };
                                                                  //  blow off a tick so we don't gronk adr
         DEC_RMW:             next_state = {DEC_RMW2,  MEM_NOP,   IPIPE_ENNA2}; //activate
-        DEC_RMW2:            next_state = {DEC_IF1 ,  MEM_OSADR, IPIPE_NOP }; // from nn
+        DEC_RMW2:            next_state = {DEC_IF2A ,  MEM_OSADR, IPIPE_NOP }; // from nn
         
         
         //  IF memory -- rmw  else these are all reg 2 reg
@@ -1361,10 +1404,10 @@ begin
         // of assembler code that count but the number of bytes assembled. Oh well I signed
         // up for this......  and had a notion of what I was getting into.
         //
-        DEC_PFxCB:     next_state = { DEC_PFxCB2, MEM_IFPP1,  IPIPE_ENN}; // this gets d
-        DEC_PFxCB2:    next_state = { DEC_PFxCB3, MEM_OFIXpD, IPIPE_EN1}; //actual inst 
-        DEC_PFxCB3:    next_state = { DEC_PFxCB4, MEM_IFPP1,  IPIPE_ENNEN2A2}; 
-        DEC_PFxCB4:    next_state = { DEC_IF2A,   MEM_OSADR,  IPIPE_EN1};  //execute ir2
+        DEC_PFxCB:     next_state = { DEC_PFxCB2, MEM_IFPP1,  IPIPE_EN1}; // this gets inst
+        DEC_PFxCB2:    next_state = { DEC_PFxCB3, MEM_OFIXpD, IPIPE_EN12}; //next inst - get op 
+        DEC_PFxCB3:    next_state = { DEC_PFxCB4, MEM_NOP,    IPIPE_ENNA2}; 
+        DEC_PFxCB4:    next_state = { DEC_IF2A,   MEM_OSADR,  IPIPE_NOP};  //execute ir2
         
         //  crap   gotta subtract 2  (we always increment pc 2 times relative to the inst
         //  that got interrupted. also can't push and dec pc without 2 adders.
@@ -1377,6 +1420,8 @@ begin
         DEC_INT3:       next_state = {DEC_INT4, MEM_INTA,     IPIPE_NOP};
         DEC_INT4:       next_state = {DEC_INT5, MEM_NOP,      IPIPE_ENN};
         DEC_INT5:       next_state = {DEC_IF2,  MEM_IFINT,    IPIPE_NOP};
+        DEC_EXSPHL:     next_state = {DEC_PUSH, MEM_OSSP,     IPIPE_NOP};
+        DEC_RMWDD1:     next_state = {DEC_RMW,  MEM_OFIXpD,       IPIPE_EN1};
         default:        next_state = {DEC_IDLE, MEM_NOP,      IPIPE_NOP};
     endcase
 end
@@ -1390,12 +1435,12 @@ always @(posedge wb_clk_i or posedge rst_i)
 //-----------------------instruction register #1 ----------------------------------
 //  //         next_pipe_state         {ir1,ir2,nn,act_ir2}
 
-wire update_prefix =   dec_state == DEC_EXEC  | dec_state == DEC_DDFD;
-                       
+wire update_prefix = dec_state == DEC_EXEC  | dec_state == DEC_DDFD | dec_state == DEC_PFxCB;
+wire iext_ed =  update_prefix & (ir1[7:0]==8'hed);
+wire iext_cb =  update_prefix & (ir1[7:0]==8'hcb);
 always @(posedge wb_clk_i or posedge rst_i)
     if (rst_i) ir1 <=   NOP;
-    else if (wb_rdy_nhz & next_pipe_state[3]) ir1 <=  {2'b0, wb_dat_i} ;
-    else if ( wb_rdy_nhz &update_prefix )     ir1 <=  {ir1[7:0]==8'hed, ir1[7:0]==8'hcb, ir1[7:0]}; 
+    else if (wb_rdy_nhz & next_pipe_state[3]) ir1 <=  {iext_ed, iext_cb, wb_dat_i} ;
 
 //----------- prefix states -----------------------------------------
 //  strings of prefix insts are ignored up to last one.  Also dded and fded are ignored 
@@ -1420,6 +1465,7 @@ always @(posedge wb_clk_i or posedge rst_i)
     if (rst_i) ir2 <= 10'h0;
     else if (wb_rdy_nhz & next_pipe_state[2]) ir2 <= ir1;
     
+wire kill_prefix = next_mem_state == MEM_OFIXpD;
 always @(posedge wb_clk_i or posedge rst_i)
     if (rst_i)
     begin
@@ -1428,14 +1474,21 @@ always @(posedge wb_clk_i or posedge rst_i)
     end
     else if (wb_rdy_nhz & next_pipe_state[2])
     begin
-        ir2dd <= ir1dd;
-        ir2fd <= ir1fd;
+        ir2dd <= ir1dd & ~kill_prefix;
+        ir2fd <= ir1fd & ~kill_prefix;
     end
     
 always @(posedge wb_clk_i )
     if (wb_rdy_nhz & next_pipe_state[0]) exec_ir2 <= 1'b1;
     else                                 exec_ir2 <= 1'b0;
+//-------------- special instruction flag ---------------------------
+// need this because the POP flow we use gronks ir1 early.  I guess we could use
+// ir2, but keeping the dec_state sequencer independent from ir2 seems like a good idea.
+//
 
+always @(posedge wb_clk_i)
+    if ((dec_state == DEC_EXEC) | (dec_state == DEC_DDFD))   
+                            ex_tos_hl <= (ir1 == EXs6SP7_HL);
 
 
 
@@ -1521,7 +1574,9 @@ always @(posedge wb_clk_i or posedge rst_i)
 //
 //issue:  how is EXs6SP7_HL implemented  --  it is known as a rmw  - and only trick for this file is
 // that nn must be properly updates with ir2
- 
+// 5/17/04  Sure didn't get EXs6SP7_HL right first time through.   After some serious thought
+//  decided to hop onto the POP flow with this  --- POP - exchange - PUSH   biggest trick 
+//  is modified SP updating.
 
 // 4/30/04 changed else if  (we_next) we had a hazard and this term
 //  seemed to be gronking nn.  see if it works now.  Pretty tricky stuff.
@@ -1530,6 +1585,10 @@ always @(posedge wb_clk_i or posedge rst_i)
     else if  ((DEC_EXEC == next_dec_state) & wb_rdy) flag_os1 <= 1'b0;
     else if  ( we_next & wb_rdy_nhz  )               flag_os1 <= 1'b1;
 
+wire ir2_cb_shift =  (ir2[9:6] == 4'b01_00) ; // I'll hand or the 8 defined terms here
+wire ir2_cb_bit   =  (ir2[9:6] ==  CB_RES ) |
+                     (ir2[9:6] ==  CB_SET )  ;
+
 
 wire [15:0] pc_2 = pc - 16'h2; 
 always @(posedge wb_clk_i or posedge rst_i)
@@ -1537,29 +1596,43 @@ always @(posedge wb_clk_i or posedge rst_i)
     else if (wb_rdy_nhz)
     begin
         if ( we_next & flag_os1)                            nn <= { nn[7:0], nn[15:8] } ;
+        
         else if(we_next & ( next_mem_state == MEM_CALL))     nn <= {pc};
         else if(we_next & ( next_mem_state == MEM_OSSP_PCM2))  nn <= {pc_2[7:0], pc_2[15:8]};
         else if(EXs6SP7_HL== ir2 & ir2dd & exec_ir2)         nn <= ixr;
         else if(EXs6SP7_HL== ir2 & ir2fd & exec_ir2)         nn <= iyr;
         else if(EXs6SP7_HL== ir2         & exec_ir2)          nn <= hl;
+        else if((INCs6HL7==ir2 | DECs6HL7==ir2) & exec_ir2)   nn[15:8] <= alu8_out;
+        else if( ir2_cb_shift & MEM_OSADR == next_mem_state )       nn[15:8] <= sh_alu;
+        else if( ir2_cb_bit   & MEM_OSADR == next_mem_state )       nn[15:0] <= bit_alu;
+        else if (next_pipe_state[1])  nn  <= { wb_dat_i, nn[15:8] };   // ENN overides os stuff 
         // these are the general cases with ir1 providing register specification
+        // let PUSH have priority  (we need os_h for some indexed stores  under ir1dd)  
+        else if (we_next & ir1 == PUSHsHL)  nn   <= hl_or_ixiy;   // use for PUSHsHL
         else if(we_next & ( next_mem_state == MEM_OS1     |
                             next_mem_state == MEM_OSIXpD  |
                             next_mem_state == MEM_OSSP    |
                             next_mem_state == MEM_IOS_N   |
                             next_mem_state == MEM_OSNN     ) )
+            // oh my god  -- operands go out in different order to stack than they
+            // do to normal stores. Oh well, guess that makes ordering consistent in
+            // memory
             begin
-                 if (os_a)     nn[15:8] <= ar;
-                 if (os_b)     nn[15:8] <= br;
-                 if (os_c)     nn       <= {br, cr };  // use for PUSHsBC
-                 if (os_d)     nn[15:8] <= dr;
-                 if (os_e)     nn       <= {dr, er };  // use for PUSHsDE
-                 if (os_h)     nn[15:8] <= hr;
-                 if (os_l)     nn       <= {hr, lr };  // use for PUSHsHL
-                 if (os_f)     nn       <= {ar, fr };  // use for PUSHsAF
+                 if (os_a)     nn       <= {ar, fr };  // use for PUSHsAF 
+                 if (os_b)     nn       <= {br, cr };  // use for PUSHsBC
+                 if (os_c)     nn[15:8] <= cr;  
+                 if (os_d)     nn       <= {dr, er };  // use for PUSHsDE
+                 if (os_e)     nn[15:8] <=  er;  
+                 if (os_h)     nn       <= {hr, lr };  
+                 if (os_l)     nn[15:8] <= lr;  
+                 if (os_bc)    nn       <= {cr, br };  
+                 if (os_de)    nn       <= {er, dr };
+                 if (os_sp)    nn       <= {sp[7:0], sp[15:8] };
+                 if (os_hl)    nn       <= {lr, hr };
+                 if (os_ixr)   nn       <= {ixr[7:0], ixr[15:8] };
+                 if (os_iyr)   nn       <= {iyr[7:0], iyr[15:8] };            
             end
         // 4/19/2004 previously no if here - if not needed we don't need next_pipe_state[1] eithor
-        else if (next_pipe_state[1])  nn  <= { wb_dat_i, nn[15:8] };    
     end
           
 
@@ -1598,21 +1671,21 @@ always @(posedge wb_clk_i or posedge rst_i)
 //       
 //     ED_LDs6NN7_REG   REG== SP     // needs to be done from ir2
 //     ED_LDsREG_6NN7   REG== SP     //  do from ir2 - no hazard as executed on IF2 - refill pipe
+wire ed_ld_spreg = (ED_LDsREG_6NN7 == {ir2[9:6],ir2[3:0]}) & (ir2[5:4] == DBL_REG_SP);
 
 always @(posedge wb_clk_i )
 begin
     if (exec_ir2 )   //  this has priority of course 
         begin  
-            if (LDsSP_NN     == ir2)   sp <= nn;
-            if (ED_LDsREG_6NN7 == ir2) sp <= nn;
+            if (LDsSP_NN   == ir2)   sp <= nn;
+            if (ed_ld_spreg)         sp <= nn;
             if (  DECsSP   == ir2 )  sp <= add16;
             if (  INCsSP   == ir2 )  sp <= add16;
         end
     if (wb_rdy_nhz)  //the no hazard term should kill these if any abvove is happening in parallel
     begin
-         if (  DECsSP   == ir1 & dec_state == DEC_EXEC)  sp <= adr_alu;
-         if (  INCsSP   == ir1 & dec_state == DEC_EXEC)  sp <= adr_alu;
-         if (  LDsSP_HL == ir1 & dec_state == DEC_EXEC)  sp <= {hr,lr};
+         if (  LDsSP_HL == ir1 & dec_state == DEC_EXEC)  sp <= hl_or_ixiy;
+         if (  LDsSP_HL == ir1 & dec_state == DEC_DDFD)  sp <= hl_or_ixiy;
          if (next_mem_state == MEM_OFSP      ) sp <= adr_alu;
          if (next_mem_state == MEM_OSSP      ) sp <= adr_alu;
          if (next_mem_state == MEM_OSSP_PCM2 ) sp <= adr_alu;

@@ -38,16 +38,19 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //  CVS Log
 //
-//  $Id: z80_testbed.v,v 1.1 2004-05-13 14:57:35 bporcella Exp $
+//  $Id: z80_testbed.v,v 1.2 2004-05-18 22:31:21 bporcella Exp $
 //
-//  $Date: 2004-05-13 14:57:35 $
-//  $Revision: 1.1 $
+//  $Date: 2004-05-18 22:31:21 $
+//  $Revision: 1.2 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.1  2004/05/13 14:57:35  bporcella
+//      testbed files
+//
 //      Revision 1.1.1.1  2004/04/13 23:47:42  bporcella
 //      import first files
 //
@@ -117,7 +120,7 @@ initial
 begin
     clk = 0;
     //  timeout if u hang up  -- always a good idea.
-    #50000     $finish;
+    #500000     $finish;
     $display("simulation timeout"); 
 end
 

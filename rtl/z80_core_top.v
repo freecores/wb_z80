@@ -37,16 +37,19 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //  CVS Log
 //
-//  $Id: z80_core_top.v,v 1.1 2004-04-27 21:27:13 bporcella Exp $
+//  $Id: z80_core_top.v,v 1.2 2004-04-27 21:38:22 bporcella Exp $
 //
-//  $Date: 2004-04-27 21:27:13 $
-//  $Revision: 1.1 $
+//  $Date: 2004-04-27 21:38:22 $
+//  $Revision: 1.2 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.1  2004/04/27 21:27:13  bporcella
+//      first core build
+//
 //      Revision 1.1.1.1  2004/04/13 23:47:42  bporcella
 //      import first files
 //
@@ -57,6 +60,7 @@
 //  inst_exec.v       // main execution engine for z80
 //  generic_spram.v   // main memory  (on board)
 //  z80_sdram_config.v // fundamentally wishbone glue logic - not on top per design guidelines
+//  add a comment test lint
 //-------1---------2---------3--------Module Name and Port List------7---------8---------9--------0
 module z80_core_top(  wb_dat_o,      
                       wb_stb_o,      

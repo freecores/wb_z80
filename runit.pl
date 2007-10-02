@@ -58,7 +58,7 @@ if ($signo = system ("vvp a.out"))
 { 
 	die "vvp error = $signo";
 }
-if ($signo = system ("winwave  dump.vcd"))
+if ($signo = system ("gtkwave  dump.vcd"))
 { 
 	die "assembler error = $signo";
 };

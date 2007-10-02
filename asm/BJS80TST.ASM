@@ -1049,13 +1049,14 @@ push_19:	ld	a,data_aa
 		inc_error_cnt
 push_20:	ld	sp,stack_end
 ex_0:		ld	de,data_1234
-		ld	hl,data_ffff
+		ld	hl,data_55aa   ; 10/2/2007 was ffff  need to check all bytes (missed a bug)
 		ex	de,hl
-		ld	a,data_ff
+		ld	a,data_55
 		cp	d
 		jr	z,ex_1
 		inc_error_cnt
-ex_1:		cp	e
+ex_1:		ld	a,data_aa
+		cp	e
 		jr	z,ex_2
 		inc_error_cnt
 ex_2:		ld	a,#12      ;bjp was >data_1234
@@ -6094,8 +6095,28 @@ cpdr_8:		ld	a,#34      ;bjp was >data_1234
 		inc_error_cnt
 cpdr_9:		jr	nz,cpdr_10
 		inc_error_cnt
-cpdr_10:	jp	m,out_0
+cpdr_10:	jp	m,c_ret_f
 		inc_error_cnt
+
+;add a test for the Stephen Warren bug
+;  first cut didn't do it. Lots of insts actually work. Gotta be something
+;  basically executed from ir1  - like push
+c_ret_f:	di
+		ld	de, #1122
+		push	de
+		pop	af
+		ld	hl, 0xaa55
+		ld	a,7
+		cp	0
+		ret	z
+		push	hl
+		pop	af 
+		cp	a, data_aa
+		jp	z, out_0
+		inc_error_cnt
+
+
+
 ;
 ;the file portfe.xxx must be examined to see if the proper output is generated
 ;

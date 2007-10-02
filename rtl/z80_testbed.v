@@ -38,16 +38,19 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //  CVS Log
 //
-//  $Id: z80_testbed.v,v 1.4 2004-05-27 14:25:04 bporcella Exp $
+//  $Id: z80_testbed.v,v 1.5 2007-10-02 20:25:12 bporcella Exp $
 //
-//  $Date: 2004-05-27 14:25:04 $
-//  $Revision: 1.4 $
+//  $Date: 2007-10-02 20:25:12 $
+//  $Revision: 1.5 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.4  2004/05/27 14:25:04  bporcella
+//      Instruction test (with interrupts) runs!!!
+//
 //      Revision 1.3  2004/05/21 02:51:25  bporcella
 //      inst test  got to the worked macro
 //
@@ -78,7 +81,7 @@ wire     bist_err;
 
 
 //-------   CAUTION  TEST RESULTS DEPEND ON INITIAL CONDITIONS -------
-//  bist will not pass if some of these imputs are not as specified.
+//  bist will not pass if some of these inputs are not as specified.
 //
 z80_core_top i_z80_core_top(                   
     .wb_dat_o(),      

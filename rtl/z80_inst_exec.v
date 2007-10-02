@@ -71,16 +71,19 @@
 // 
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: z80_inst_exec.v,v 1.4 2004-05-21 02:51:25 bporcella Exp $
+//  $Id: z80_inst_exec.v,v 1.5 2007-10-02 20:25:12 bporcella Exp $
 //
-//  $Date: 2004-05-21 02:51:25 $
-//  $Revision: 1.4 $
+//  $Date: 2007-10-02 20:25:12 $
+//  $Revision: 1.5 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.4  2004/05/21 02:51:25  bporcella
+//      inst test  got to the worked macro
+//
 //      Revision 1.3  2004/05/18 22:31:21  bporcella
 //      instruction test getting to final stages
 //
@@ -812,7 +815,7 @@ begin
     if ( LDsDE_NN  == ir2 & exec_ir2)  er <= nn[7:0];
     if ( POPsDE    == ir2 & exec_ir2)  er <= nn[7:0];
     if ( EXX       == ir2  & exec_ir2) er <= ep;
-    if ( EXsDE_HL  == ir2  & exec_ir2) er <= hr;
+    if ( EXsDE_HL  == ir2  & exec_ir2) er <= lr;   // hharte was er <= hr
     if ( LDsE_N    == ir2  & exec_ir2) er <= nn[15:8];
     if (ir2[2:0] == REG8_E & 
              bit_alu_act & exec_ir2)   er <= bit_alu;

@@ -42,9 +42,6 @@
 // Here, we are trying to make the parameters we use for instruction decoding
 // as easy to understand as possible.
 //
-// The origional file is included as a comment below.  (this is a very long file)
-// It is then re-produced with transformations --  so the significance of the parameters should 
-// be very clear.
 //
 // Note how assembler syntax is transformed 
 // into verilog symbols.    
@@ -64,16 +61,19 @@
 //
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: opcodes.v,v 1.4 2004-05-27 14:23:36 bporcella Exp $
+//  $Id: opcodes.v,v 1.5 2007-10-02 20:25:12 bporcella Exp $
 //
-//  $Date: 2004-05-27 14:23:36 $
-//  $Revision: 1.4 $
+//  $Date: 2007-10-02 20:25:12 $
+//  $Revision: 1.5 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.4  2004/05/27 14:23:36  bporcella
+//      Instruction test (with interrupts) runs!!!
+//
 //      Revision 1.3  2004/05/21 02:51:25  bporcella
 //      inst test  got to the worked macro
 //

@@ -97,7 +97,7 @@
 //  This will require auxillary logic for computing the address ---  but most of the decodes
 //  required will be there anyway.   
 //  On further reflection, I think I will bite-the-bullet and use an always to define next_state.
-//  I don't like to use always to define wires, but I also want to dicument the setting of 
+//  I don't like to use always to define wires, but I also want to document the setting of 
 //  exec_ir2 in the same place - that is 3 different things.  
 //  
 //  Hazards:
@@ -109,16 +109,19 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: z80_memstate2.v,v 1.6 2004-06-03 20:29:35 bporcella Exp $
+//  $Id: z80_memstate2.v,v 1.7 2007-10-02 20:25:12 bporcella Exp $
 //
-//  $Date: 2004-06-03 20:29:35 $
-//  $Revision: 1.6 $
+//  $Date: 2007-10-02 20:25:12 $
+//  $Revision: 1.7 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.6  2004/06/03 20:29:35  bporcella
+//      some fixes found in synthesis
+//
 //      Revision 1.5  2004/05/27 14:23:36  bporcella
 //      Instruction test (with interrupts) runs!!!
 //
@@ -194,7 +197,7 @@ output [15:0]  wb_adr_o;
 output         wb_we_o; 
 output         wb_cyc_o; 
 output         wb_stb_o; 
-//output         wb_lock;     // bit set and clear insts should be atomic - could matter sometime
+//output         wb_lock;  // bit set and clear insts should be atomic - could matter sometime
 output [1:0]   wb_tga_o;
 output [7:0]   wb_dat_o;   // from nn
 output [15:0]  adr_alu;    // 4/18/2004??  why? 5/20  to update hl on 
@@ -391,18 +394,7 @@ parameter       MEM_NOP      = 5'h00,
 //-------1---------2---------3--------Wires----------------6---------7---------8---------9--------0
 
 
-//wire        use_sp;  //  old names  probably from first go-around 
-//wire        use_pc; 
-//wire        use_hl; 
-//wire        use_de; 
-//wire        use_bc; 
-//wire        use_flags;
 wire        cb_mem;
-//wire        br_test8t;  // branch test true  (8 test field)
-//wire        br_test4t;  // branch test true  (4 test field)
-                    
-//wire        ofos; 
-//wire        any_os;   // most terms above only valid on mem_exec  this includes all stores
 wire        wb_rdy_nhz;        
 wire        dec_blk_inc;        
 wire        we_next;
@@ -411,13 +403,6 @@ wire        wb_int;
 wire [15:0] hl, de, bc;
 wire [3:0]  mem_exec_dec;
 
-//wire  use_a  ;old names for hazard dect.  remove
-//wire  use_b  ;
-//wire  use_c  ;
-//wire  use_d  ;
-//wire  use_e  ;
-//wire  use_h  ;
-//wire  use_l  ;
 // don't forget that as 1r1 is executed it is transferred to ir2.  Anything I need to know
 // about subsequent operations must be stored.
 //               6              5              4                15
@@ -736,6 +721,16 @@ assign mem_exec_dec =
     {I1DCNT {RETsPO== ir1 & ~pvf}} & I1_RET |//      RET PO       ; E0
     {I1DCNT {RETsNZ== ir1 & ~zf }} & I1_RET |//      RET NZ       ; C0
     {I1DCNT {RETsZ == ir1 & zf  }} & I1_RET |//      RET Z        ; C8
+    
+    {I1DCNT {RETsC == ir1 & ~cf }} & I1_R2R |//      RET C        ; D8 r2r should work as all codes 
+    {I1DCNT {RETsM == ir1 & ~sf }} & I1_R2R |//      RET M        ; F8 should be nop in ir2
+    {I1DCNT {RETsNC== ir1 & cf  }} & I1_R2R |//      RET NC       ; D0
+    {I1DCNT {RETsP == ir1 & sf  }} & I1_R2R |//      RET P        ; F0
+    {I1DCNT {RETsPE== ir1 & ~pvf}} & I1_R2R |//      RET PE       ; E8
+    {I1DCNT {RETsPO== ir1 & pvf }} & I1_R2R |//      RET PO       ; E0
+    {I1DCNT {RETsNZ== ir1 & zf  }} & I1_R2R |//      RET NZ       ; C0
+    {I1DCNT {RETsZ == ir1 & ~zf }} & I1_R2R |//      RET Z        ; C8
+    
     {I1DCNT {EXs6SP7_HL   == ir1}} & I1_POP |//      EX (SP),HL   ; E3
     {I1DCNT {DECs6HL7     == ir1}} & I1_RMW |//      DEC (HL)     ; 35
     {I1DCNT {INCs6HL7     == ir1}} & I1_RMW |//      INC (HL)     ; 34

@@ -109,16 +109,21 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: z80_memstate2.v,v 1.7 2007-10-02 20:25:12 bporcella Exp $
+//  $Id: z80_memstate2.v,v 1.8 2007-10-12 17:08:43 bporcella Exp $
 //
-//  $Date: 2007-10-02 20:25:12 $
-//  $Revision: 1.7 $
+//  $Date: 2007-10-12 17:08:43 $
+//  $Revision: 1.8 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.7  2007/10/02 20:25:12  bporcella
+//      fixed bugs and augmented instruction test.
+//      ex   de hl     bug fixed                               thanks Howard Harte
+//      ret   condition            (ret not taken bug)   thanks -  Stephen Warren
+//
 //      Revision 1.6  2004/06/03 20:29:35  bporcella
 //      some fixes found in synthesis
 //
@@ -255,18 +260,19 @@ parameter   IPIPE_NOP       = 4'b0000,   //  guess I could define single bits an
             
 //  well at first cut I tried to make this 2 state macines both less than 16 states.
 //  this is 56 states at first cut.   Assignemnt is subject to change.
-
+//  10/11/2007   I really need some comments about the states.  Lots of stuff here to 
+//               pick up from scratch.
 // ------  mem state decoder state machine states --------------------------------
 parameter       DEC_IDLE      = 6'h00,            
-                DEC_HALT      = 6'h01,             
-                DEC_IF1       = 6'h02,                 
-                DEC_IF2       = 6'h03,               
-                DEC_IF2A      = 6'h04,               
-                DEC_EXEC      = 6'h05,            
-                DEC_CB        = 6'h06,           
-                DEC_DDFD      = 6'h07,               
-                DEC_ED        = 6'h08,             
-                DEC_EDNN1     = 6'h09,              
+                DEC_HALT      = 6'h01,   //  note that we can service interrupts while "halted"          
+                DEC_IF1       = 6'h02,   //  start the instruction pipe with MEM_IFPP1              
+                DEC_IF2       = 6'h03,   //  store the active read in ir1 and start another MEM_IFPP1             
+                DEC_IF2A      = 6'h04,   //  start a MEM_IFPP1  (but ir1 already has next instruction)            
+                DEC_EXEC      = 6'h05,   //  PRIME ir1 decode state.  decode first byte of EACH inst here         
+                DEC_CB        = 6'h06,   //  PRIME decode yields I1_CB        
+                DEC_DDFD      = 6'h07,   //  PRIME decode yields I1_DDFD  (DD or FD group)          
+                DEC_ED        = 6'h08,   //  PRIME decode yields I1_ED         
+                DEC_EDNN1     = 6'h09,   //  Immediate states           
                 DEC_EDNN2     = 6'h0a,             
                 DEC_EDRD1     = 6'h0b,              
                 DEC_EDRD2     = 6'h0c,              
@@ -283,9 +289,9 @@ parameter       DEC_IDLE      = 6'h00,
                 DEC_EDBMV1    = 6'h17, 
                 DEC_EDBMV2    = 6'h18, 
                 DEC_EDBMV3    = 6'h19, 
-                DEC_N         = 6'h1a,
+                DEC_N         = 6'h1a,  //  PRIME decode yields DEC_N  (next byte is immediate data byte)
                 DEC_NIN       = 6'h1b,    
-                DEC_NN        = 6'h1c,
+                DEC_NN        = 6'h1c,  //  PRIME decode yields DEC_NN (2 immediate data bytes follow)
                 DEC_NNCALL1   = 6'h1d,
                 DEC_NNCALL2   = 6'h1e,
                 DEC_NNOS1     = 6'h1f,  
@@ -297,10 +303,10 @@ parameter       DEC_IDLE      = 6'h00,
                 DEC_NNOF4     = 6'h25,  
                 DEC_DDOS      = 6'h26,   
                 DEC_DDOF      = 6'h27,   
-                DEC_OF        = 6'h28,     
-                DEC_POP       = 6'h29,    
-                DEC_PUSH      = 6'h2a,   
-                DEC_RMW       = 6'h2b,    
+                DEC_OF        = 6'h28,  //  PRIME decode yields  I1_OF  
+                DEC_POP       = 6'h29,  //  PRIME decode yields  I1_POP
+                DEC_PUSH      = 6'h2a,  //  PRIME decode yields  I1_PUSH
+                DEC_RMW       = 6'h2b,  //  PRIME decode yields  I1_RMW
                 DEC_RMW2      = 6'h2c,   
                 DEC_CBM       = 6'h2d,  
                 DEC_PFxCB     = 6'h2e,  
@@ -312,7 +318,7 @@ parameter       DEC_IDLE      = 6'h00,
                 DEC_INT3      = 6'h34,   
                 DEC_INT4      = 6'h35,   
                 DEC_INT5      = 6'h36, 
-                DEC_RET       = 6'h37,
+                DEC_RET       = 6'h37,  //  PRIME decode yields
                 DEC_NNJMP     = 6'h38,
                 DEC_DDN       = 6'h39,
                 DEC_RET2      = 6'h3a,
@@ -1026,21 +1032,29 @@ wire use_fr_exec = ( RETsC        == ir1  |
                      RETsZ        == ir1  |
                      PUSHsAF      == ir1   ) ;
 
-assign hazard =  (dec_state == DEC_EXEC  & exec_ir2 ) & ( upd_fr & use_fr_exec  |
-                                                          upd_ar & os_a         | 
-                                                          upd_br & os_b         |
-                                                          upd_br & use_bc_exec  |
-                                                          upd_cr & os_c         |
-                                                          upd_cr & use_bc_exec  |
-                                                          upd_dr & os_d         |
-                                                          upd_dr & use_de_exec  |
-                                                          upd_er & os_e         |
-                                                          upd_er & use_de_exec  |
-                                                          upd_hr & os_h         | 
-                                                          upd_lr & os_l         |
-                                                          upd_hr & use_hl_exec  |
-                                                          upd_lr & use_hl_exec  |
-                                                          upd_sp_exec & use_sp_exec );
+assign hazard =  (dec_state == DEC_EXEC  & exec_ir2 ) & ( upd_fr & use_fr_exec      |
+                                                          upd_ar & os_a             | 
+                                                          upd_br & os_b             |
+                                                          upd_br & use_bc_exec      |
+                                                          upd_cr & os_c             |
+                                                          upd_cr & use_bc_exec      |
+                                                          upd_dr & os_d             |
+                                                          upd_dr & use_de_exec      |
+                                                          upd_er & os_e             |
+                                                          upd_er & use_de_exec      |
+                                                          upd_hr & os_h             | 
+                                                          upd_lr & os_l             |
+                                                          upd_hr & use_hl_exec      |
+                                                          upd_lr & use_hl_exec      |
+                                                          upd_sp_exec & use_sp_exec   );
+//----------------- inst hazard logic ------------------------------------------
+
+
+
+always @(posedge wb_clk_i or posedge rst_i)
+    if (rst_i) inst_haz <= 1'b0;
+    else if  (we_next & (pc - 16'h1) == mux21)  inst_haz <= 1'b1;
+    else if  (dec_state == DEC_EXEC)  inst_haz <= 1'b0;   // highest priority interrupt
 
 
 
@@ -1248,6 +1262,10 @@ assign we_next = next_mem_state == MEM_OS1        |
 
 //-------1---------2---------3--------State Machines-------6---------7---------8---------9--------0
 // we do this just to save virtual paper below.
+//  IMPORTANT  next_dec_state  -- gets registered - mostly used in next tick.
+//             next_mem_state --- gets further decoded -- lots of terms - most related to next tick 
+//  	       next_pipe_state - generall represents enables for regs on trailing edge of this tick
+// 
 //              6              5              4                15
 assign {next_dec_state, next_mem_state, next_pipe_state} = next_state;
 
@@ -1385,9 +1403,9 @@ begin
             else if (LDs6HL7_N==ir1) next_state = {DEC_IF1,  MEM_OSIXpD, IPIPE_ENN};
             else                     next_state = {DEC_EXEC, MEM_IFPP1,  IPIPE_EN12A2};//r2r 
         
-        DEC_NIN:                     next_state = {DEC_IF2,  MEM_IFPP1,    IPIPE_ENNA2};
-        
-        
+        //DEC_NIN:                     next_state = {DEC_IF2,  MEM_IFPP1,    IPIPE_ENNA2};
+        //  bjp 10/11/2007  have ir1 set - next inst gets started  should goto DEC_EXEC
+        DEC_NIN:                     next_state = {DEC_EXEC,  MEM_IFPP1,    IPIPE_ENNA2};
         //ISSUES: LDsSP_NN - load commanded from ir2 decode?  and mechaninsm for updating PC on
         //        JMP and CALL
         //  on CALL   We have IFNN for JMP  
@@ -1756,14 +1774,6 @@ begin
          if (next_mem_state == MEM_CALL      ) sp <= adr_alu;
     end
 end
-//----------------- inst hazard logic ------------------------------------------
-
-
-
-always @(posedge wb_clk_i or posedge rst_i)
-    if (rst_i) inst_haz <= 1'b0;
-    else if  (we_next & (pc - 16'h1) == mux21)  inst_haz <= 1'b1;
-    else if  (dec_state == DEC_EXEC)  inst_haz <= 1'b0;   // highest priority interrupt
 
 //-------------------- int logic ----------------------------------------
 //  We have a wishbone interrupt system  -  which i guess does not preclude a 

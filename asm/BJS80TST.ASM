@@ -5824,6 +5824,16 @@ in_39:		dec	hl
 in_40:		dec	hl
 		ld	a,(hl)
 		cp	a,data_aa
+		jr	z,in_41
+		inc_error_cnt
+		; 10,09,2007  Test for Howard Hart's IN bug
+in_41:		ld	hl, t_var1
+		ld	a, #34       ; something not in the input sequencer
+		in 	a,(in_port)
+		ld	(hl), a      ; 10/12/2007 previously this instruction got skipped
+		ld	a, #34
+		ld 	a,(hl)
+		cp      a,data_7f
 		jr	z,ldi_0
 		inc_error_cnt
 ldi_0:		ld	hl,t_var1

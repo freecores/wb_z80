@@ -109,16 +109,19 @@
 //  complete before starting the ir1 operation  
 //-------1---------2---------3--------CVS Log -----------------------7---------8---------9--------0
 //
-//  $Id: z80_memstate2.v,v 1.8 2007-10-12 17:08:43 bporcella Exp $
+//  $Id: z80_memstate2.v,v 1.9 2007-10-16 21:28:02 bporcella Exp $
 //
-//  $Date: 2007-10-12 17:08:43 $
-//  $Revision: 1.8 $
+//  $Date: 2007-10-16 21:28:02 $
+//  $Revision: 1.9 $
 //  $Author: bporcella $
 //  $Locker:  $
 //  $State: Exp $
 //
 // Change History:
 //      $Log: not supported by cvs2svn $
+//      Revision 1.8  2007/10/12 17:08:43  bporcella
+//      added fix for IN bug found by howard
+//
 //      Revision 1.7  2007/10/02 20:25:12  bporcella
 //      fixed bugs and augmented instruction test.
 //      ex   de hl     bug fixed                               thanks Howard Harte
@@ -418,6 +421,13 @@ wire  [4:0]        next_mem_state;
 wire  [3:0]        next_pipe_state;             
 wire               ed_dbl_rd;  
 wire  [15:0]       hl_or_ixiy;
+
+// hharte
+wire ed_blk_mv;
+wire ed_blk_in;
+wire ed_blk_out;
+wire  [15:0] mux21;
+
 //-------1---------2---------3--------Registers------------6---------7---------8---------9--------0
 
 reg [15:0]   pc;
@@ -802,14 +812,15 @@ wire dec_blk_rpt =
            ED_CPDR      == ir1 |//      CPDR       ; ED B9
            ED_INDR      == ir1 |//      INDR       ; ED BA
            ED_OTDR      == ir1 ;//      OTDR       ; ED BB
-wire ed_blk_mv =  ED_LDIR      == ir1 |  ED_LDI       == ir1 |
+// hharte
+assign ed_blk_mv =  ED_LDIR      == ir1 |  ED_LDI       == ir1 |
                   ED_LDDR      == ir1 |  ED_LDD       == ir1 ;
 wire ed_blk_cp =  ED_CPIR      == ir1 |  ED_CPI       == ir1 |
                   ED_CPDR      == ir1 |  ED_CPD       == ir1 ;
-wire ed_blk_in =  ED_INIR      == ir1 |  ED_INI      == ir1 |
+assign ed_blk_in =  ED_INIR      == ir1 |  ED_INI      == ir1 |
                   ED_INDR      == ir1 |  ED_IND      == ir1 ;
 
-wire ed_blk_out = ED_OTIR      == ir1 |  ED_OUTI      == ir1 |
+assign ed_blk_out = ED_OTIR      == ir1 |  ED_OUTI      == ir1 |
                   ED_OTDR      == ir1 |  ED_OUTD      == ir1 ;
 
 wire dec_blk_io = ed_blk_in | ed_blk_out;
@@ -1239,7 +1250,7 @@ wire  pre_inc_dec =    next_mem_state ==  MEM_CALL      |
                        next_mem_state ==  MEM_OSSP     ;
 
 
-wire  [15:0] mux21 =  pre_inc_dec ? adr_alu : src_mux; 
+assign  mux21 =  pre_inc_dec ? adr_alu : src_mux; 
 
 assign wb_rdy_nhz = (!wb_cyc_o | wb_ack_i ) & ~hazard;   //  wishbone ready with no hazard
 wire   wb_rdy     = !wb_cyc_o | wb_ack_i;
@@ -1272,7 +1283,7 @@ assign {next_dec_state, next_mem_state, next_pipe_state} = next_state;
 always @(ir1 or wb_int or inst_haz  or dec_state or mem_exec_dec or cb_mem or ed_nn or
          ed_blk_cp  or ed_blk_in or ed_blk_out or ed_retn or ed_blk_mv or ed_dbl_rd or blk_done or 
          fr or jmpr_true or callnn_true or jmpnn_true or 
-         ed_rmw or ed_in_reg or blk_cpi_done or jmpr or ex_tos_hl)
+         ed_rmw or ed_in_reg or blk_cpi_done or jmpr or ex_tos_hl or ed_out_reg)
          
 begin
     case (dec_state)
